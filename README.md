@@ -13,7 +13,7 @@ A com## Commands
 - `load doc <file>` - Load a document as input
 - `exit/quit` - Exit the application
 
-Use Ctrl+Enter to send multi-line messages. This allows you to compose longer prompts or include code blocks in your input. interface for interacting with GPT models via Groq.
+To send multi-line messages, either press Enter twice or use Ctrl+J. This allows you to compose longer prompts or include code blocks in your input. interface for interacting with GPT models via Groq.
 
 ## Features
 
@@ -23,7 +23,7 @@ Use Ctrl+Enter to send multi-line messages. This allows you to compose longer pr
 - Markdown rendering support
 - Rich formatting with tables and panels
 - Conversation history management
-- Multi-line input support (Ctrl+Enter to submit)
+- Multi-line input support (press Enter twice or Ctrl+J to submit)
 - Save and load conversations
 - Document loading support
 

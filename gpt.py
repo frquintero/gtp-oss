@@ -30,7 +30,7 @@ class GPTCLI:
         
     def setup_keybindings(self):
         """Setup key bindings for multi-line input."""
-        @self.kb.add('c-enter')  # Ctrl+Enter to submit
+        @self.kb.add('c-j')  # Ctrl+Enter maps to Ctrl+J
         def _(event):
             event.current_buffer.validate_and_handle()
             
@@ -195,7 +195,7 @@ class GPTCLI:
         help_table.add_row("load chat <file>", "Load conversation from a JSON file")
         help_table.add_row("load doc <file>", "Load a document as input")
         help_table.add_row("exit/quit", "Exit the application")
-        help_table.add_row("", "Use Ctrl+Enter to send multi-line messages")
+        help_table.add_row("", "Press Enter twice or Ctrl+J to send multi-line messages")
 
         self.console.print(help_table)
 

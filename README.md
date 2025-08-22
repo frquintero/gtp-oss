@@ -8,22 +8,32 @@ A com## Commands
 - `history` - Show conversation history
 - `model` - Show current model
 - `model <name>` - Switch between models
-- `save chat <file>` - Save conversation to a JSON file
-- `load chat <file>` - Load conversation from a JSON file
+- `save <file>` - Save conversation to a JSON file
+- `load <file>` - Load conversation from a JSON file
 - `load doc <file>` - Load a document into the prompt editor
 - `exit/quit` - Exit the application
 
-Use Enter to add new lines and Ctrl+Enter to send messages. When loading documents with `load doc`, the content will be loaded into the prompt editor where you can add additional text before sending with Ctrl+Enter. interface for interacting with GPT models via Groq.
+Enter your message line by line, then press Enter on an empty line to submit. When loading documents with `load doc`, the content will be pre-loaded and you can add additional lines before submitting.
+
+**Cancellation Options:**
+- Press Ctrl+C while typing to cancel input
+- Press Ctrl+C during LLM response to stop generation
+- Send empty prompt to cancel without sending to LLM interface for interacting with GPT models via Groq.
 
 ## Features
 
 - Interactive CLI interface
 - Support for multiple GPT models (openai/gpt-oss-20b, openai/gpt-oss-120b)
+- **Groq Compound AI Systems** (compound-beta, compound-beta-mini)
+  - Automatic web search for real-time information
+  - Code execution for calculations and data processing
+  - Enhanced AI capabilities beyond basic text generation
 - Real-time streaming responses
 - Markdown rendering support
 - Rich formatting with tables and panels
 - Conversation history management
-- Multi-line input support (Enter for new line, Ctrl+Enter to submit)
+- Multi-line input support (enter text line by line, press Enter on empty line to submit)
+- Prompt cancellation (Ctrl+C during input or response)
 - Save and load conversations
 - Document loading support
 
@@ -33,8 +43,15 @@ Use Enter to add new lines and Ctrl+Enter to send messages. When loading documen
 - `new` - Start a new chat session
 - `clear` - Clear conversation history
 - `history` - Show conversation history
-- `model` - Show current model
-- `model <name>` - Switch between models
+- `model` - Reset to default model (openai/gpt-oss-20b)
+- `model <name>` - Switch between models:
+  - `openai/gpt-oss-20b` - Standard 20B model
+  - `openai/gpt-oss-120b` - Larger 120B model  
+  - `compound-beta` - AI with web search & code execution (multiple tools)
+  - `compound-beta-mini` - AI with web search & code execution (single tool, 3x faster)
+- `save <file>` - Save conversation to a JSON file
+- `load <file>` - Load conversation from a JSON file
+- `load doc <file>` - Load a document into the prompt editor
 - `exit/quit` - Exit the application
 
 ## Requirements
@@ -42,7 +59,6 @@ Use Enter to add new lines and Ctrl+Enter to send messages. When loading documen
 - Python 3.x
 - Groq API access
 - Rich library for terminal formatting
-- prompt_toolkit for enhanced input handling
 
 ## Installation
 
@@ -54,7 +70,7 @@ git clone https://github.com/frquintero/gtp-oss.git
 cd gtp-oss
 
 # Install dependencies
-pip install rich groq prompt_toolkit
+pip install rich groq
 ```
 
 ## Usage

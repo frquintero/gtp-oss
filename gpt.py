@@ -14,9 +14,6 @@ from rich.layout import Layout
 from rich.columns import Columns
 from rich.table import Table
 from groq import Groq
-from prompt_toolkit import PromptSession
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.keys import Keys
 
 class GPTCLI:
     def __init__(self):
@@ -24,29 +21,51 @@ class GPTCLI:
         self.client = Groq()  # No API key needed for Groq local
         self.max_stream_height = max(10, self.console.height // 4)
         self.messages = []
-        self.session = PromptSession()
-        self.kb = KeyBindings()
-        self.setup_keybindings()
         
-    def setup_keybindings(self):
-        """Setup key bindings for multi-line input."""
-        @self.kb.add('c-m')  # Ctrl+Enter to submit
-        def _(event):
-            event.current_buffer.validate_and_handle()
-            
     def get_multiline_input(self, prefill_text: str = "") -> Optional[str]:
-        """Get multi-line input with Ctrl+Enter to submit."""
+        """Get multi-line input. Type your message, then press Enter on an empty line to submit."""
+        self.console.print("[dim]Enter your message (press Enter on empty line to submit, Ctrl+C to cancel):[/dim]")
+        
+        lines = []
+        if prefill_text:
+            # Add prefilled text as initial lines
+            lines.extend(prefill_text.split('\n'))
+            for line in lines:
+                self.console.print(f">> {line}")
+        
         try:
-            return self.session.prompt(
-                ">> ",  # Plain text prompt without Rich markup
-                multiline=True,
-                key_bindings=self.kb,
-                prompt_continuation=lambda width, line_number, is_soft_wrap: "... ",
-                default=prefill_text  # Pre-fill the prompt with text
-            )
+            while True:
+                try:
+                    line = input(">> ")
+                    
+                    # If empty line and we have content, submit
+                    if line.strip() == "" and lines:
+                        break
+                    # If empty line and no content, continue
+                    elif line.strip() == "" and not lines:
+                        continue
+                    # Add the line
+                    else:
+                        lines.append(line)
+                        
+                except EOFError:
+                    # Ctrl+D pressed
+                    if lines:
+                        break
+                    else:
+                        self.console.print("\n[yellow]Input cancelled.[/yellow]")
+                        return None
+                        
         except KeyboardInterrupt:
-            self.console.print("\n[red]Exiting...[/red]")
-            sys.exit(0)
+            self.console.print("\n[yellow]Input cancelled.[/yellow]")
+            return None
+        
+        if not lines:
+            self.console.print("[yellow]Empty prompt cancelled.[/yellow]")
+            return None
+            
+        result = '\n'.join(lines)
+        return result
             
     def load_document(self, filepath: str) -> str:
         """Load a text document and return its contents."""
@@ -136,38 +155,78 @@ class GPTCLI:
 
     def stream_response(self, model: str = "openai/gpt-oss-20b"):
         """Stream response with real-time updates using Groq."""
+        # Show compound info if using compound model
+        if model.startswith("compound-"):
+            self.show_compound_tools_used()
+            
         with Live(auto_refresh=True, console=self.console) as live:
             full_response = {"reasoning": "", "content": ""}
             tokens_used = 0
 
             try:
-                stream = self.client.chat.completions.create(
-                    model=model,
-                    messages=self.messages,
-                    temperature=1,
-                    max_completion_tokens=8192,
-                    top_p=1,
-                    reasoning_effort="medium",
-                    stream=True,
-                    stop=None
-                )
-
-                for chunk in stream:
-                    if chunk.choices[0].delta.content:
-                        full_response["content"] += chunk.choices[0].delta.content
-
+                # For compound models, we use non-streaming to get executed_tools info
+                if model.startswith("compound-"):
+                    response = self.client.chat.completions.create(
+                        model=model,
+                        messages=self.messages,
+                        temperature=1,
+                        max_completion_tokens=8192,
+                        top_p=1,
+                        stream=False,  # Non-streaming for compound models
+                        stop=None
+                    )
+                    
+                    full_response["content"] = response.choices[0].message.content
+                    
+                    # Show executed tools if available
+                    if hasattr(response.choices[0].message, 'executed_tools') and response.choices[0].message.executed_tools:
+                        try:
+                            self.show_executed_tools(response.choices[0].message.executed_tools)
+                        except Exception as e:
+                            self.console.print(f"[yellow]Note: Tools were used but couldn't display details: {str(e)}[/yellow]")
+                    
+                    # Display final response
                     panels = self.create_response_panels(
                         full_response["reasoning"],
                         full_response["content"],
                         tokens_used
                     )
-
                     if panels:
                         from rich.console import Group
                         live.update(Group(*panels))
-                    else:
-                        live.update(Text("Thinking...", style="yellow"))
+                
+                else:
+                    # Regular streaming for non-compound models
+                    stream = self.client.chat.completions.create(
+                        model=model,
+                        messages=self.messages,
+                        temperature=1,
+                        max_completion_tokens=8192,
+                        top_p=1,
+                        reasoning_effort="medium",
+                        stream=True,
+                        stop=None
+                    )
 
+                    for chunk in stream:
+                        if chunk.choices[0].delta.content:
+                            full_response["content"] += chunk.choices[0].delta.content
+
+                        panels = self.create_response_panels(
+                            full_response["reasoning"],
+                            full_response["content"],
+                            tokens_used
+                        )
+
+                        if panels:
+                            from rich.console import Group
+                            live.update(Group(*panels))
+                        else:
+                            live.update(Text("Thinking...", style="yellow"))
+
+            except KeyboardInterrupt:
+                self.console.print("\n[yellow]Response cancelled by user.[/yellow]")
+                return
             except Exception as e:
                 error_panel = Panel(
                     Text(f"Error: {str(e)}", style="red"),
@@ -181,6 +240,40 @@ class GPTCLI:
         if full_response["content"]:
             self.messages.append({"role": "assistant", "content": full_response["content"]})
 
+    def show_executed_tools(self, executed_tools):
+        """Show the tools that were executed by compound AI."""
+        if not executed_tools:
+            return
+        
+        # Simple approach - just show that tools were used
+        tool_count = len(executed_tools)
+        tools_text = f"🔧 {tool_count} AI Tool(s) Used:\n"
+        tools_text += "• The AI automatically used web search and/or code execution\n"
+        tools_text += "• This enables real-time information and calculations"
+        
+        tools_panel = Panel(
+            Text(tools_text, style="blue"),
+            title="[bold]🚀 AI Tools Executed[/bold]",
+            border_style="blue",
+            padding=(1, 2)
+        )
+        self.console.print(tools_panel)
+
+    def show_compound_tools_used(self):
+        """Show information about compound AI capabilities."""
+        info_panel = Panel(
+            Text("🔧 Compound AI Model Active\n" +
+                 "This model can automatically:\n" +
+                 "• Search the web for real-time information\n" +
+                 "• Execute Python code for calculations\n" +
+                 "• Access current data beyond training cutoff", 
+                 style="cyan"),
+            title="[bold]🚀 Enhanced AI Capabilities[/bold]",
+            border_style="cyan",
+            padding=(1, 2)
+        )
+        self.console.print(info_panel)
+
     def display_help(self):
         """Display help information."""
         help_table = Table(title="[bold]🤖 GPT CLI Commands[/bold]")
@@ -191,13 +284,14 @@ class GPTCLI:
         help_table.add_row("new", "Start a new chat session")
         help_table.add_row("clear", "Clear conversation history")
         help_table.add_row("history", "Show conversation history")
-        help_table.add_row("model", "Show current model")
-        help_table.add_row("model <name>", "Switch model (openai/gpt-oss-20b, openai/gpt-oss-120b)")
-        help_table.add_row("save chat <file>", "Save conversation to a JSON file")
-        help_table.add_row("load chat <file>", "Load conversation from a JSON file")
+        help_table.add_row("model", "Reset to default model (openai/gpt-oss-20b)")
+        help_table.add_row("model <name>", "Switch model (openai/gpt-oss-20b, openai/gpt-oss-120b, compound-beta, compound-beta-mini)")
+        help_table.add_row("save <file>", "Save conversation to a JSON file")
+        help_table.add_row("load <file>", "Load conversation from a JSON file")
         help_table.add_row("load doc <file>", "Load a document into the prompt editor")
         help_table.add_row("exit/quit", "Exit the application")
-        help_table.add_row("", "Press Enter for new line, Ctrl+Enter to send message")
+        help_table.add_row("", "Enter message line by line, press Enter on empty line to submit")
+        help_table.add_row("", "Press Ctrl+C to cancel input or stop response")
 
         self.console.print(help_table)
 
@@ -232,7 +326,12 @@ class GPTCLI:
 
     def switch_model(self, model_name: str) -> str:
         """Switch to a different model."""
-        valid_models = ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]
+        valid_models = [
+            "openai/gpt-oss-20b", 
+            "openai/gpt-oss-120b",
+            "compound-beta",
+            "compound-beta-mini"
+        ]
         if model_name in valid_models:
             self.current_model = model_name
             self.console.print(f"[green]✅ Switched to model: {model_name}[/green]")
@@ -267,12 +366,12 @@ class GPTCLI:
                         self.messages.append({"role": "user", "content": combined_input})
                         self.stream_response(self.current_model)
                 continue
-            elif user_input.lower().startswith('save chat '):
-                filepath = user_input[10:].strip()
+            elif user_input.lower().startswith('save '):
+                filepath = user_input[5:].strip()
                 self.save_conversation(filepath)
                 continue
-            elif user_input.lower().startswith('load chat '):
-                filepath = user_input[10:].strip()
+            elif user_input.lower().startswith('load '):
+                filepath = user_input[5:].strip()
                 self.load_conversation(filepath)
                 continue
             elif user_input.lower() == 'new':
@@ -285,7 +384,9 @@ class GPTCLI:
                 self.display_history()
                 continue
             elif user_input.lower() == 'model':
-                self.console.print(f"[blue]Current model: {self.current_model}[/blue]")
+                # Reset to default model if no parameter provided
+                self.current_model = "openai/gpt-oss-20b"
+                self.console.print(f"[green]✅ Reset to default model: {self.current_model}[/green]")
                 continue
             elif user_input.lower().startswith('model '):
                 model_name = user_input.split(' ', 1)[1]

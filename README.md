@@ -1,74 +1,25 @@
-# GPT CLI Enhanced v2.0
+# GPT CLI Enhanced
 
-A powerful, modular command-line interface for interacting with GPT models via Groq.
+A powerful, modular command-line interface for interacting with GPT models via Groq API.
 
 ## ✨ Features
 
-### Core Functionality
-- 🤖 Interactive CLI interface with rich formatting
-- 🧠 Support for multiple GPT models (20B, 120B, compound AI)
-- 🔧 **Groq Compound AI Systems** with automatic tool usage
-  - Web search for real-time information
-  - Code execution for calculations and data processing
-  - Enhanced AI capabilities beyond basic text generation
-- ⚡ Real-time streaming responses
-- 📝 Advanced Markdown rendering with syntax highlighting
-- 💬 Intelligent conversation management
+- 🤖 **Interactive CLI** with rich formatting and streaming responses
+- 🧠 **Multiple AI Models** including GPT-OSS 20B/120B and Compound AI systems
+- 🔧 **Compound AI Tools** with web search and code execution capabilities
+-  **Conversation Management** with save/load functionality
+- 📊 **Export Support** to JSON, Markdown, and text formats
+- � **Template System** for common tasks (code review, translation, etc.)
+- ⚙️ **Configurable Settings** via config file and environment variables
+- 🎨 **Rich UI** with panels, tables, and syntax highlighting
 
-### Enhanced Features
-- 📋 **Template System** - Predefined prompts for common tasks
-- 📊 **Advanced Export** - JSON, Markdown, Text, PDF formats
-- 📁 **File Management** - Organized conversation storage
-- 🔍 **Search & Filter** - Find conversations and messages
-- ⚙️ **Configuration** - Customizable settings and preferences
-- 🛡️ **Error Handling** - Robust retry logic and validation
-- 🎨 **Rich UI** - Beautiful panels, tables, and formatting
+## 🚀 Quick Start
 
-### Developer Features
-- 🏗️ **Modular Architecture** - Clean, maintainable code structure
-- 🧪 **Comprehensive Testing** - Unit tests for all components
-- 📦 **Easy Installation** - Simple setup with pip
-- 🔌 **Extensible** - Plugin system for custom functionality
+### Prerequisites
+- Python 3.8+
+- Groq API key (get one at [console.groq.com](https://console.groq.com))
 
-## 📋 Commands
-
-### Basic Commands
-- `help` - Show help message or help for specific command
-- `help <command>` - Get detailed help for a specific command
-- `new` - Start a new chat session
-- `clear` - Clear conversation history
-- `history` - Show conversation history
-- `exit/quit` - Exit the application
-
-### Model Management
-- `model` - Reset to default model (openai/gpt-oss-20b)
-- `model <name>` - Switch between models:
-  - `openai/gpt-oss-20b` - Standard 20B model
-  - `openai/gpt-oss-120b` - Larger 120B model  
-  - `compound-beta` - AI with web search & code execution (multiple tools)
-  - `compound-beta-mini` - AI with web search & code execution (single tool, 3x faster)
-
-### File Operations
-- `save <file>` - Save conversation to a JSON file
-- `load <file>` - Load conversation from a JSON file
-- `load doc <file>` - Load a document into the prompt editor
-- `export <format> <file>` - Export conversation to different formats
-  - Formats: `json`, `md`, `txt`, `pdf`
-- `list` - List all saved conversations
-
-### Templates & Advanced Features
-- `template` - List available prompt templates
-- `template <name>` - Use a specific template (code_review, explain, translate, etc.)
-
-### Input Methods
-- **Multi-line input**: Enter text line by line, press Enter on empty line to submit
-- **Document loading**: Use `load doc <file>` to pre-fill prompt with document content
-- **Template variables**: Templates will prompt for required variables like `{code}`, `{language}`
-- **Cancellation**: Press Ctrl+C to cancel input or stop response generation
-
-## 🚀 Installation
-
-### Quick Start
+### Installation
 ```bash
 # Clone the repository
 git clone https://github.com/frquintero/gtp-oss.git
@@ -77,29 +28,76 @@ cd gtp-oss
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the enhanced CLI
+# Set your API key
+export GROQ_API_KEY="your-api-key-here"
+
+# Run the CLI
 python gpt.py
+# Or use the bash script
+./gpt
 ```
 
-### Advanced Installation
+## 🎯 Usage
+
+### Basic Commands
 ```bash
-# Install in development mode
-pip install -e .
+help                    # Show all commands
+new                     # Start new conversation
+clear                   # Clear current conversation
+history                 # Show conversation history
+exit                    # Exit application
+```
 
-# Or install specific features
-pip install -r requirements.txt
+### Model Management
+```bash
+model                   # Show current model
+model gpt-4o           # Switch to specific model
+```
 
-# For PDF export support
-pip install fpdf2
+**Available Models:**
+- `openai/gpt-oss-20b` - Standard 20B model (default)
+- `openai/gpt-oss-120b` - Larger 120B model
+- `compound-beta` - AI with multiple tools (web search, code execution)
+- `compound-beta-mini` - Faster single-tool AI
 
-# For future RAG features
-pip install faiss-cpu sentence-transformers
+### File Operations
+```bash
+save filename.json      # Save conversation
+load filename.json      # Load conversation
+load doc file.txt       # Load document content
+export md output.md     # Export to Markdown
+export json backup.json # Export to JSON
+list                    # List saved conversations
+```
+
+### Templates
+```bash
+template                # List available templates
+template code_review    # Use code review template
+template translate      # Use translation template
+```
+
+### Chat Examples
+```bash
+>> What is the capital of France?
+>> template code_review
+Enter code: def hello(): print("world")
+>> load doc README.md
+>> Please summarize this document
 ```
 
 ## ⚙️ Configuration
 
-The application uses a `config.json` file for settings:
+### Environment Variables (Recommended)
+```bash
+export GROQ_API_KEY="your-groq-api-key"
+export GPT_DEFAULT_MODEL="openai/gpt-oss-20b"
+export GPT_MAX_TOKENS="8192"
+export GPT_TEMPERATURE="1.0"
+```
 
+### Configuration File
+The application uses `config.json` for settings:
 ```json
 {
   "api_key": "",
@@ -107,6 +105,7 @@ The application uses a `config.json` file for settings:
   "max_tokens": 8192,
   "temperature": 1.0,
   "retry_attempts": 3,
+  "timeout": 30,
   "conversations_dir": "conversations",
   "ui": {
     "max_panel_height": 15,
@@ -115,47 +114,64 @@ The application uses a `config.json` file for settings:
 }
 ```
 
-### Environment Variables
-You can also use environment variables:
-- `GROQ_API_KEY` - Your Groq API key
-- `GPT_DEFAULT_MODEL` - Default model to use
-- `GPT_MAX_TOKENS` - Maximum tokens per request
-- `GPT_TEMPERATURE` - Temperature setting (0.0-2.0)
+## 📁 Project Structure
 
-## 🎯 Usage Examples
-
-### Basic Chat
-```bash
-# Use the included bash script
-./gpt
->> Hello, how are you?
-
-# Or use the Python script directly
-python gpt.py
->> Hello, how are you?
+```
+gtp-oss/
+├── README.md           # This file
+├── requirements.txt    # Python dependencies
+├── config.json         # Configuration settings
+├── gpt.py             # Main entry point
+├── gpt                # Bash launcher script
+├── setup.py           # Package installation
+└── src/               # Source code
+    ├── cli.py         # Main CLI application
+    ├── models/        # Data models (conversation, message)
+    ├── services/      # External services (Groq API, file management)
+    ├── ui/            # User interface components
+    └── utils/         # Utilities and validators
 ```
 
-### Using Templates
+## 🛠️ Development
+
+### Running Tests
 ```bash
->> template code_review
-Enter value for code: def hello(): print("hi")
-# AI will review your code
+python -m pytest tests/
 ```
 
-### Document Analysis
+### Installing in Development Mode
 ```bash
->> load doc myfile.txt
-# Document content is loaded, you can add more context
->> Please summarize this document
+pip install -e .
 ```
 
-### Export Conversations
-```bash
->> export md my_conversation.md
->> export json backup.json
-```
+### Code Structure
+- **Modular Design**: Clean separation of concerns
+- **Type Hints**: Full type annotation support
+- **Error Handling**: Robust retry logic and validation
+- **Extensible**: Easy to add new commands and features
 
-## 📝 Project Notes
+## � Requirements
 
-### Architecture Update
-The project has been updated to use only the enhanced version of the CLI. The previous dual-architecture (original and enhanced versions) has been simplified to a single codebase. All functionality is now provided by the modular implementation in the `src` directory.
+See `requirements.txt` for full dependency list. Main dependencies:
+- `rich` - Terminal formatting and UI
+- `groq` - Groq API client
+- `pydantic` - Data validation
+- `python-dotenv` - Environment variable management
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if needed
+5. Submit a pull request
+
+## 📄 License
+
+This project is open source. See the repository for license details.
+
+## 🔗 Links
+
+- [Groq Console](https://console.groq.com) - Get your API key
+- [Groq Documentation](https://docs.groq.com) - API documentation
+- [GitHub Repository](https://github.com/frquintero/gtp-oss) - Source code

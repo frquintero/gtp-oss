@@ -1,6 +1,8 @@
 #!/home/fratq/test/gtp-oss/.venv/bin/python
 import sys
 import os
+import json
+import datetime
 from typing import Optional, Union, List, Dict, Any
 from rich.console import Console
 from rich.panel import Panel
@@ -12,6 +14,9 @@ from rich.layout import Layout
 from rich.columns import Columns
 from rich.table import Table
 from groq import Groq
+from prompt_toolkit import PromptSession
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.keys import Keys
 
 class GPTCLI:
     def __init__(self):
@@ -19,6 +24,64 @@ class GPTCLI:
         self.client = Groq()  # No API key needed for Groq local
         self.max_stream_height = max(10, self.console.height // 4)
         self.messages = []
+        self.session = PromptSession()
+        self.kb = KeyBindings()
+        self.setup_keybindings()
+        
+    def setup_keybindings(self):
+        """Setup key bindings for multi-line input."""
+        @self.kb.add('c-enter')  # Ctrl+Enter to submit
+        def _(event):
+            event.current_buffer.validate_and_handle()
+            
+    def get_multiline_input(self) -> Optional[str]:
+        """Get multi-line input with Ctrl+Enter to submit."""
+        try:
+            return self.session.prompt(
+                "\n[bold blue]>>[/bold blue] ",
+                multiline=True,
+                key_bindings=self.kb,
+                prompt_continuation=lambda width, line_number, is_soft_wrap: "... "
+            )
+        except KeyboardInterrupt:
+            self.console.print("\n[red]Exiting...[/red]")
+            sys.exit(0)
+            
+    def load_document(self, filepath: str) -> str:
+        """Load a text document and return its contents."""
+        try:
+            with open(filepath, 'r') as file:
+                content = file.read()
+            self.console.print(f"[green]✅ Loaded document: {filepath}[/green]")
+            return content
+        except Exception as e:
+            self.console.print(f"[red]Error loading document: {str(e)}[/red]")
+            return ""
+            
+    def save_conversation(self, filepath: str):
+        """Save the current conversation to a JSON file."""
+        try:
+            data = {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "model": self.current_model,
+                "messages": self.messages
+            }
+            with open(filepath, 'w') as file:
+                json.dump(data, file, indent=2)
+            self.console.print(f"[green]✅ Conversation saved to: {filepath}[/green]")
+        except Exception as e:
+            self.console.print(f"[red]Error saving conversation: {str(e)}[/red]")
+            
+    def load_conversation(self, filepath: str):
+        """Load a conversation from a JSON file."""
+        try:
+            with open(filepath, 'r') as file:
+                data = json.load(file)
+            self.messages = data["messages"]
+            self.current_model = data.get("model", self.current_model)
+            self.console.print(f"[green]✅ Loaded conversation from: {filepath}[/green]")
+        except Exception as e:
+            self.console.print(f"[red]Error loading conversation: {str(e)}[/red]")
 
     def get_user_input(self) -> Optional[str]:
         """Get user input with graceful exit handling."""
@@ -123,11 +186,16 @@ class GPTCLI:
         help_table.add_column("Description", style="magenta")
 
         help_table.add_row("help", "Show this help message")
+        help_table.add_row("new", "Start a new chat session")
         help_table.add_row("clear", "Clear conversation history")
         help_table.add_row("history", "Show conversation history")
+        help_table.add_row("model", "Show current model")
         help_table.add_row("model <name>", "Switch model (openai/gpt-oss-20b, openai/gpt-oss-120b)")
+        help_table.add_row("save chat <file>", "Save conversation to a JSON file")
+        help_table.add_row("load chat <file>", "Load conversation from a JSON file")
+        help_table.add_row("load doc <file>", "Load a document as input")
         help_table.add_row("exit/quit", "Exit the application")
-        help_table.add_row("", "Any other input is sent as a prompt")
+        help_table.add_row("", "Use Ctrl+Enter to send multi-line messages")
 
         self.console.print(help_table)
 
@@ -147,6 +215,13 @@ class GPTCLI:
             history_table.add_row(role, content)
 
         self.console.print(history_table)
+
+    def new_chat(self):
+        """Start a new chat by reinitializing the client and clearing history."""
+        self.client = Groq()
+        self.messages = []
+        self.current_model = "openai/gpt-oss-20b"
+        self.console.print("[green]✅ Started new chat session.[/green]")
 
     def clear_history(self):
         """Clear conversation history."""
@@ -172,7 +247,7 @@ class GPTCLI:
         self.current_model = "openai/gpt-oss-20b"
 
         while True:
-            user_input = self.get_user_input()
+            user_input = self.get_multiline_input()
             if not user_input:
                 continue
 
@@ -180,11 +255,32 @@ class GPTCLI:
             if user_input.lower() == 'help':
                 self.display_help()
                 continue
+            elif user_input.lower().startswith('load doc '):
+                filepath = user_input[9:].strip()
+                content = self.load_document(filepath)
+                if content:
+                    self.messages.append({"role": "user", "content": content})
+                    self.stream_response(self.current_model)
+                continue
+            elif user_input.lower().startswith('save chat '):
+                filepath = user_input[10:].strip()
+                self.save_conversation(filepath)
+                continue
+            elif user_input.lower().startswith('load chat '):
+                filepath = user_input[10:].strip()
+                self.load_conversation(filepath)
+                continue
+            elif user_input.lower() == 'new':
+                self.new_chat()
+                continue
             elif user_input.lower() == 'clear':
                 self.clear_history()
                 continue
             elif user_input.lower() == 'history':
                 self.display_history()
+                continue
+            elif user_input.lower() == 'model':
+                self.console.print(f"[blue]Current model: {self.current_model}[/blue]")
                 continue
             elif user_input.lower().startswith('model '):
                 model_name = user_input.split(' ', 1)[1]

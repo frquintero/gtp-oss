@@ -30,18 +30,19 @@ class GPTCLI:
         
     def setup_keybindings(self):
         """Setup key bindings for multi-line input."""
-        @self.kb.add('c-j')  # Ctrl+Enter maps to Ctrl+J
+        @self.kb.add('c-m')  # Ctrl+Enter to submit
         def _(event):
             event.current_buffer.validate_and_handle()
             
-    def get_multiline_input(self) -> Optional[str]:
+    def get_multiline_input(self, prefill_text: str = "") -> Optional[str]:
         """Get multi-line input with Ctrl+Enter to submit."""
         try:
             return self.session.prompt(
-                "\n[bold blue]>>[/bold blue] ",
+                ">> ",  # Plain text prompt without Rich markup
                 multiline=True,
                 key_bindings=self.kb,
-                prompt_continuation=lambda width, line_number, is_soft_wrap: "... "
+                prompt_continuation=lambda width, line_number, is_soft_wrap: "... ",
+                default=prefill_text  # Pre-fill the prompt with text
             )
         except KeyboardInterrupt:
             self.console.print("\n[red]Exiting...[/red]")
@@ -53,6 +54,7 @@ class GPTCLI:
             with open(filepath, 'r') as file:
                 content = file.read()
             self.console.print(f"[green]✅ Loaded document: {filepath}[/green]")
+            self.console.print(f"[yellow]Document content loaded into prompt. Add more text if needed, then press Ctrl+Enter to send.[/yellow]")
             return content
         except Exception as e:
             self.console.print(f"[red]Error loading document: {str(e)}[/red]")
@@ -193,9 +195,9 @@ class GPTCLI:
         help_table.add_row("model <name>", "Switch model (openai/gpt-oss-20b, openai/gpt-oss-120b)")
         help_table.add_row("save chat <file>", "Save conversation to a JSON file")
         help_table.add_row("load chat <file>", "Load conversation from a JSON file")
-        help_table.add_row("load doc <file>", "Load a document as input")
+        help_table.add_row("load doc <file>", "Load a document into the prompt editor")
         help_table.add_row("exit/quit", "Exit the application")
-        help_table.add_row("", "Press Enter twice or Ctrl+J to send multi-line messages")
+        help_table.add_row("", "Press Enter for new line, Ctrl+Enter to send message")
 
         self.console.print(help_table)
 
@@ -259,8 +261,11 @@ class GPTCLI:
                 filepath = user_input[9:].strip()
                 content = self.load_document(filepath)
                 if content:
-                    self.messages.append({"role": "user", "content": content})
-                    self.stream_response(self.current_model)
+                    # Get user input with pre-filled document content
+                    combined_input = self.get_multiline_input(content)
+                    if combined_input:
+                        self.messages.append({"role": "user", "content": combined_input})
+                        self.stream_response(self.current_model)
                 continue
             elif user_input.lower().startswith('save chat '):
                 filepath = user_input[10:].strip()

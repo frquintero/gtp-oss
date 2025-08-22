@@ -10,10 +10,10 @@ A com## Commands
 - `model <name>` - Switch between models
 - `save chat <file>` - Save conversation to a JSON file
 - `load chat <file>` - Load conversation from a JSON file
-- `load doc <file>` - Load a document as input
+- `load doc <file>` - Load a document into the prompt editor
 - `exit/quit` - Exit the application
 
-To send multi-line messages, either press Enter twice or use Ctrl+J. This allows you to compose longer prompts or include code blocks in your input. interface for interacting with GPT models via Groq.
+Use Enter to add new lines and Ctrl+Enter to send messages. When loading documents with `load doc`, the content will be loaded into the prompt editor where you can add additional text before sending with Ctrl+Enter. interface for interacting with GPT models via Groq.
 
 ## Features
 
@@ -23,7 +23,7 @@ To send multi-line messages, either press Enter twice or use Ctrl+J. This allows
 - Markdown rendering support
 - Rich formatting with tables and panels
 - Conversation history management
-- Multi-line input support (press Enter twice or Ctrl+J to submit)
+- Multi-line input support (Enter for new line, Ctrl+Enter to submit)
 - Save and load conversations
 - Document loading support
 

@@ -1,0 +1,22 @@
+{
+  "api_key": "",
+  "default_model": "openai/gpt-oss-20b",
+  "max_tokens": 8192,
+  "temperature": 1.0,
+  "save_history": true,
+  "history_file": "conversation_history.json",
+  "retry_attempts": 3,
+  "timeout": 30,
+  "conversations_dir": "conversations",
+  "documents_dir": "documents",
+  "ui": {
+    "max_panel_height": 15,
+    "color_scheme": "default",
+    "show_token_usage": true
+  },
+  "export": {
+    "default_format": "json",
+    "include_metadata": true,
+    "auto_timestamp": true
+  }
+}

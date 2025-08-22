@@ -1,0 +1,19 @@
+#!/bin/bash
+# GPT CLI - Enhanced Version Launcher
+
+# Get the directory where this script is located
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# Use the virtual environment Python if available, otherwise system Python
+if [ -f "$DIR/.venv/bin/python" ]; then
+    PYTHON="$DIR/.venv/bin/python"
+else
+    PYTHON="python3"
+fi
+
+# Change to the project directory to ensure relative paths work
+cd "$DIR"
+
+# Use the enhanced version
+echo "Starting GPT CLI Enhanced..."
+$PYTHON gpt.py "$@"

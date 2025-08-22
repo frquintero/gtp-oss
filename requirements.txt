@@ -1,0 +1,30 @@
+# GPT CLI Enhanced - Requirements
+
+# Core dependencies
+rich>=13.0.0
+groq>=0.4.0
+
+# Enhanced features
+pydantic>=2.0.0
+click>=8.0.0
+python-dotenv>=1.0.0
+
+# Export capabilities  
+fpdf2>=2.7.0
+python-docx>=0.8.11
+markdown>=3.4.0
+
+# Optional: For future RAG features
+# faiss-cpu>=1.7.0
+# sentence-transformers
+# chromadb>=0.4.0
+
+# Optional: For web API
+# fastapi>=0.100.0
+# uvicorn>=0.20.0
+
+# Development dependencies
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=4.0.0
+# mypy>=1.0.0

@@ -19,7 +19,6 @@ if str(current_dir) not in sys.path:
 from models.conversation import Conversation
 from models.message import Message
 from services.groq_client import GroqClient
-from services.file_manager import FileManager
 from utils.config import Config
 from utils.validators import InputValidator, CommandValidator
 from utils.commands import CommandHandler
@@ -42,7 +41,6 @@ class GPTCLI:
         # Initialize components
         self.conversation = Conversation()
         self.groq_client = GroqClient(self.config.settings)
-        self.file_manager = FileManager(self.config.settings)
         self.command_handler = CommandHandler(self)
         
         # UI components
@@ -56,86 +54,210 @@ class GPTCLI:
         self.current_model = self.config.get('default_model', 'openai/gpt-oss-20b')
         
     def display_welcome(self):
-        """Display welcome message."""
-        welcome_panel = self.panel_factory.create_info_panel(
-            "Welcome to GPT CLI Enhanced! 🚀\n\n" +
-            "Features:\n" +
-            "• Multiple AI models with tool support\n" +
-            "• Rich conversation management\n" +
-            "• Template system for common tasks\n" +
-            "• Advanced export capabilities\n\n" +
-            "Type 'help' for commands or start chatting!",
-            "GPT CLI v2.0"
-        )
-        self.console.print(welcome_panel)
-    
-    def get_multiline_input(self, prefill_text: str = "") -> Optional[str]:
-        """Get multi-line input with enhanced error handling."""
-        self.console.print("[dim]Enter your message (press Enter on empty line to submit, Ctrl+C to cancel):[/dim]")
-        
-        lines = []
-        if prefill_text:
-            lines.extend(prefill_text.split('\n'))
-            for line in lines:
-                self.console.print(f">> {line}")
-        
+        """Display compact welcome message."""
+        # compact single-line welcome; extended help available with 'help'
+        text = "GPT CLI Enhanced v2.0 — chat with models (type 'help' for commands)"
         try:
-            while True:
-                try:
-                    line = input(">> ")
-                    
-                    if line.strip() == "" and lines:
-                        break
-                    elif line.strip() == "" and not lines:
+            panel = self.panel_factory.create_info_panel(text, title="")
+            self.console.print(panel)
+        except Exception:
+            # Fallback to plain print if panel creation fails
+            self.console.print(text)
+
+    def display_status_bar(self):
+        """Print a minimal status bar with current model and stream hint."""
+        model = getattr(self, 'current_model', None) or "unknown"
+        status = f"[dim]Model:[/dim] [cyan]{model}[/cyan]   [dim]Mode:[/dim] [green]interactive[/green]"
+        # Keep it minimal and not persistent; print before prompt each loop
+        try:
+            self.console.print(status, overflow="ellipsis")
+        except Exception:
+            print(status)
+
+    def get_multiline_input(self, prefill_text: str = "") -> Optional[str]:
+        """Get input using raw mode where:
+        - Enter (Return) sends the prompt to the LLM
+        - Ctrl+J inserts a newline into the message
+        - Ctrl+C quits the application (raises KeyboardInterrupt)
+
+        This uses low-level terminal control so blank lines are allowed in the
+        message via Ctrl+J and a single Enter submits immediately.
+        """
+        self.console.print("[dim]Enter your message (Enter = send, Ctrl+J = newline, Ctrl+C = quit):[/dim]")
+
+        # Show any prefill content and initialize buffer
+        buffer: list[str] = []
+        if prefill_text:
+            # Print prefill lines for context
+            for line in prefill_text.split('\n'):
+                self.console.print(f">> {line}")
+            # Initialize buffer with prefill_text characters (including newlines)
+            buffer = list(prefill_text)
+
+        try:
+            import termios
+            import tty
+            import sys
+
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+
+            try:
+                tty.setraw(fd)
+                sys.stdout.write(">> ")
+                sys.stdout.flush()
+
+                while True:
+                    ch = sys.stdin.read(1)
+                    if not ch:
                         continue
-                    else:
-                        lines.append(line)
+
+                    # If user types '/' as the first character, open the command palette
+                    # and insert the selected candidate into the current buffer.
+                    if ch == '/' and not buffer:
+                        # Echo the '/' character first
+                        sys.stdout.write('/')
+                        sys.stdout.flush()
+                        buffer.append('/')
                         
-                except EOFError:
-                    if lines:
+                        # No need to wait for '/' rendering - command palette will position cursor correctly
+                        
+                        # Import the command palette module
+                        # Try different import paths for flexibility
+                        open_palette = None
+                        
+                        try:
+                            # First try absolute import path
+                            from src.ui.command_palette import open_palette
+                        except ImportError:
+                            try:
+                                # Then try relative import path
+                                from ui.command_palette import open_palette
+                            except ImportError:
+                                open_palette = None
+                        
+                        if open_palette:
+                            # Restore terminal to normal mode for the palette
+                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                            
+                            candidates = [
+                                "help",
+                                "new",
+                                "clear",
+                                "history",
+                                "save",
+                                "load",
+                                "list",
+                                "export",
+                                "template",
+                                "model openai/gpt-oss-20b",
+                            ]
+                            
+                            try:
+                                # The open_palette function will handle displaying the palette
+                                # and letting the user select with arrow keys
+                                sel = open_palette(candidates)
+                                
+                                # Re-enter raw mode for continued editing
+                                tty.setraw(fd)
+                                
+                                # Clear the line and redraw prompt
+                                sys.stdout.write("\r>> ")
+                                sys.stdout.write("\033[K")  # Clear line from cursor position
+                                sys.stdout.flush()
+                                
+                                if sel:
+                                    # Reset buffer with just the selection (no /)
+                                    buffer = []
+                                    sys.stdout.write(sel)
+                                    sys.stdout.flush()
+                                    buffer.extend(list(sel))
+                                else:
+                                    # If no selection or cancelled, just go back to empty prompt
+                                    buffer = []
+                            except Exception as e:
+                                # If any error occurs, go back to raw mode and report
+                                tty.setraw(fd)
+                                sys.stdout.write(f"\r>> [ERROR: {str(e)}]")
+                                sys.stdout.flush()
+                                buffer = []
+                            
+                            continue
+                        else:
+                            # Inform the user that the palette isn't available
+                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                            sys.stdout.write("\n\nCommand palette not available - module not found\n")
+                            sys.stdout.flush()
+                            
+                            # Re-enter raw mode and redraw prompt with '/'
+                            tty.setraw(fd)
+                            sys.stdout.write(">> /")
+                            sys.stdout.flush()
+                            continue
+
+                    # Ctrl+C -> quit the application
+                    if ch == "\x03":
+                        # restore terminal before raising so shell remains usable
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                        raise KeyboardInterrupt
+
+                    # Enter/Return (carriage return) -> submit
+                    # Note: many terminals send '\r' (13) for Enter; treat that as submit.
+                    if ch == "\r" or ord(ch) == 13:
+                        sys.stdout.write("\n")
+                        sys.stdout.flush()
                         break
-                    else:
-                        self.console.print("\n[yellow]Input cancelled.[/yellow]")
-                        return None
-                        
+
+                    # Ctrl+J (line feed, ASCII 10) -> insert newline into message
+                    if ch == "\x0a":
+                        buffer.append('\n')
+                        sys.stdout.write("\n>> ")
+                        sys.stdout.flush()
+                        continue
+
+                    # Backspace handling
+                    if ch in ("\x7f", "\x08"):
+                        if buffer:
+                            buffer.pop()
+                            # Erase last character visually
+                            sys.stdout.write("\b \b")
+                            sys.stdout.flush()
+                        continue
+
+                    # Printable character -> echo and append
+                    buffer.append(ch)
+                    sys.stdout.write(ch)
+                    sys.stdout.flush()
+
+            finally:
+                # Ensure terminal state is restored
+                try:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                except Exception:
+                    pass
+
         except KeyboardInterrupt:
-            self.console.print("\n[yellow]Input cancelled.[/yellow]")
-            return None
-        
-        if not lines:
+            # User requested quit via Ctrl+C
+            self.console.print("\n[yellow]Exiting...[/yellow]")
+            # Re-raise so outer run loop can exit
+            raise
+        except Exception:
+            # Fall back to the simple input() if raw mode fails
+            try:
+                line = input(">> ")
+                if not line:
+                    return None
+                return line
+            except Exception:
+                self.console.print("[yellow]Input cancelled.[/yellow]")
+                return None
+
+        content = ''.join(buffer)
+        if not content.strip():
             self.console.print("[yellow]Empty prompt cancelled.[/yellow]")
             return None
-            
-        return '\n'.join(lines)
-    
-    def process_template(self, template: str) -> Optional[str]:
-        """Process a template by asking user for variables."""
-        import re
-        
-        # Find all placeholders
-        placeholders = re.findall(r'\{([^}]+)\}', template)
-        
-        if not placeholders:
-            return template
-        
-        # Ask user for each placeholder
-        variables = {}
-        self.console.print("[yellow]Template requires the following variables:[/yellow]")
-        
-        for placeholder in set(placeholders):  # Remove duplicates
-            try:
-                value = Prompt.ask(f"Enter value for [cyan]{placeholder}[/cyan]")
-                variables[placeholder] = value
-            except KeyboardInterrupt:
-                self.console.print("\n[yellow]Template cancelled.[/yellow]")
-                return None
-        
-        # Replace placeholders
-        result = template
-        for placeholder, value in variables.items():
-            result = result.replace(f"{{{placeholder}}}", value)
-        
-        return result
+
+        return content
     
     def stream_response(self, model: str = None):
         """Stream response with enhanced UI."""
@@ -245,61 +367,7 @@ class GPTCLI:
                 self.console.print("[yellow]No conversation history.[/yellow]")
             return True
         
-        elif command == 'list':
-            conversations = self.file_manager.list_conversations()
-            if conversations:
-                conv_table = self.table_factory.create_conversations_table(conversations)
-                self.console.print(conv_table)
-            else:
-                self.console.print("[yellow]No saved conversations found.[/yellow]")
-            return True
-        
-        elif command in ['exit', 'quit']:
-            self.console.print("[yellow]👋 Goodbye![/yellow]")
-            sys.exit(0)
-        
-        elif command == 'save':
-            error = CommandValidator.validate_save_command(args)
-            if error:
-                self.console.print(f"[red]{error}[/red]")
-            else:
-                filename = args[0]
-                try:
-                    filepath = self.file_manager.save_conversation(self.conversation, filename)
-                    self.console.print(f"[green]✅ Conversation saved to: {filepath}[/green]")
-                except Exception as e:
-                    self.console.print(f"[red]Error saving: {str(e)}[/red]")
-            return True
-        
-        elif command == 'load':
-            error = CommandValidator.validate_load_command(args)
-            if error:
-                self.console.print(f"[red]{error}[/red]")
-                return True
-            
-            if args[0] == 'doc':
-                # Load document
-                filepath = args[1]
-                try:
-                    content = self.file_manager.load_document(filepath)
-                    self.console.print(f"[green]✅ Loaded document: {filepath}[/green]")
-                    
-                    # Get combined input
-                    combined_input = self.get_multiline_input(content)
-                    if combined_input:
-                        self.conversation.add_message("user", combined_input)
-                        self.stream_response()
-                except Exception as e:
-                    self.console.print(f"[red]Error loading document: {str(e)}[/red]")
-            else:
-                # Load conversation
-                filename = args[0]
-                try:
-                    self.conversation = self.file_manager.load_conversation(filename)
-                    self.console.print(f"[green]✅ Loaded conversation: {filename}[/green]")
-                except Exception as e:
-                    self.console.print(f"[red]Error loading conversation: {str(e)}[/red]")
-            return True
+    # Note: explicit 'exit' / 'quit' commands removed — user quits with Ctrl+C
         
         elif command == 'model':
             error = CommandValidator.validate_model_command(args)
@@ -314,43 +382,6 @@ class GPTCLI:
                     # Switch to specific model
                     self.current_model = args[0]
                     self.console.print(f"[green]✅ Switched to model: {self.current_model}[/green]")
-            return True
-        
-        elif command == 'export':
-            error = CommandValidator.validate_export_command(args)
-            if error:
-                self.console.print(f"[red]{error}[/red]")
-            else:
-                format_type, filename = args
-                try:
-                    if format_type == 'json':
-                        filepath = self.file_manager.save_conversation(self.conversation, filename)
-                        self.console.print(f"[green]✅ Exported to JSON: {filepath}[/green]")
-                    elif format_type == 'md':
-                        self.file_manager.export_conversation_markdown(self.conversation, filename)
-                        self.console.print(f"[green]✅ Exported to Markdown: {filename}[/green]")
-                    elif format_type == 'txt':
-                        self.file_manager.export_conversation_text(self.conversation, filename)
-                        self.console.print(f"[green]✅ Exported to text: {filename}[/green]")
-                    elif format_type == 'pdf':
-                        self.console.print("[yellow]PDF export not yet implemented[/yellow]")
-                except Exception as e:
-                    self.console.print(f"[red]Export failed: {str(e)}[/red]")
-            return True
-        
-        elif command == 'template':
-            if not args:
-                # List templates
-                self.command_handler.execute(user_input)
-            else:
-                # Use template
-                template_result = self.command_handler.execute(user_input)
-                if template_result:
-                    # Process template
-                    processed = self.process_template(template_result)
-                    if processed:
-                        self.conversation.add_message("user", processed)
-                        self.stream_response()
             return True
         
         # Try command handler for other commands
@@ -369,6 +400,12 @@ class GPTCLI:
         
         while True:
             try:
+                # lightweight status shown each iteration
+                try:
+                    self.display_status_bar()
+                except Exception:
+                    pass
+
                 user_input = self.get_multiline_input()
                 if not user_input:
                     continue

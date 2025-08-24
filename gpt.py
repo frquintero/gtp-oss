@@ -22,7 +22,20 @@ def main():
         # Importar y ejecutar la CLI
         from cli import GPTCLI
         cli = GPTCLI()
-        cli.run()
+        
+        # Check if we have command line arguments
+        if len(sys.argv) > 1:
+            # Handle command line arguments
+            command = " ".join(sys.argv[1:])
+            if cli.handle_command(command):
+                return
+            else:
+                # If not a command, treat as regular input
+                cli.conversation.add_message("user", command)
+                cli.stream_response()
+        else:
+            # Run interactive mode
+            cli.run()
     except KeyboardInterrupt:
         print("\nGoodbye!")
     except Exception as e:

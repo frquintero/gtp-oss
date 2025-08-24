@@ -53,25 +53,15 @@ class InputValidator:
         # Check for illegal characters in filename
         illegal_chars = '<>:"/\\|?*'
         return not any(char in filename for char in illegal_chars)
-    
+
     @staticmethod
-    def validate_export_format(format_type: str) -> bool:
-        """Validate export format."""
-        supported_formats = ['json', 'md', 'txt', 'pdf']
-        return format_type.lower() in supported_formats
-    
-    @staticmethod
-    def validate_template_variables(template: str, variables: Dict[str, str]) -> List[str]:
-        """Validate that all template variables are provided."""
-        # Find all placeholders in template like {variable}
-        placeholders = re.findall(r'\{([^}]+)\}', template)
-        missing = []
-        
-        for placeholder in placeholders:
-            if placeholder not in variables:
-                missing.append(placeholder)
-        
-        return missing
+    def validate_export_format(fmt: str) -> bool:
+        """Validate supported export formats."""
+        if not fmt:
+            return False
+        fmt = fmt.lower()
+        supported = {"json", "txt", "md"}
+        return fmt in supported
     
     @staticmethod
     def sanitize_filename(filename: str) -> str:
@@ -134,9 +124,10 @@ class CommandValidator:
         
         # Lista de comandos válidos
         valid_commands = {
-            'help', 'new', 'clear', 'history', 'save', 'load', 
-            'model', 'export', 'template', 'list', 'search',
-            'config', 'settings', 'quit', 'exit'
+            'help', 'new', 'clear', 'history', 'model',
+            'config', 'settings',
+            # file-related commands
+            'save', 'load', 'list', 'export', 'template'
         }
         
         # Solo es un comando si la primera palabra está en la lista de comandos válidos
@@ -148,54 +139,6 @@ class CommandValidator:
             'args': args,
             'raw_args': ' '.join(args) if args else ''
         }
-    
-    @staticmethod
-    def validate_save_command(args: List[str]) -> Optional[str]:
-        """Validate save command arguments."""
-        if len(args) != 1:
-            return "Usage: save <filename>"
-        
-        filename = args[0]
-        if not InputValidator.validate_filename(filename):
-            return f"Invalid filename: {filename}"
-        
-        return None  # Valid
-    
-    @staticmethod
-    def validate_load_command(args: List[str]) -> Optional[str]:
-        """Validate load command arguments."""
-        if len(args) < 1:
-            return "Usage: load <filename> or load doc <filename>"
-        
-        if args[0] == 'doc':
-            if len(args) != 2:
-                return "Usage: load doc <filename>"
-            filename = args[1]
-        else:
-            if len(args) != 1:
-                return "Usage: load <filename>"
-            filename = args[0]
-        
-        if not InputValidator.validate_file_path(filename, must_exist=True):
-            return f"File not found: {filename}"
-        
-        return None  # Valid
-    
-    @staticmethod
-    def validate_export_command(args: List[str]) -> Optional[str]:
-        """Validate export command arguments."""
-        if len(args) != 2:
-            return "Usage: export <format> <filename>"
-        
-        format_type, filename = args
-        
-        if not InputValidator.validate_export_format(format_type):
-            return f"Unsupported format: {format_type}. Use: json, md, txt, pdf"
-        
-        if not InputValidator.validate_filename(filename):
-            return f"Invalid filename: {filename}"
-        
-        return None  # Valid
     
     @staticmethod
     def validate_model_command(args: List[str]) -> Optional[str]:
@@ -212,6 +155,18 @@ class CommandValidator:
             return f"Invalid model: {model}. Valid models: {', '.join(valid_models)}"
         
         return None  # Valid
+
+    @staticmethod
+    def validate_save_command(args: List[str]) -> Optional[str]:
+        """Validate save command arguments: expect exactly one filename."""
+        if len(args) != 1:
+            return "Usage: save <filename>"
+
+        filename = args[0]
+        if not InputValidator.validate_filename(filename):
+            return f"Invalid filename: {filename}"
+
+        return None
 
 
 class ConfigValidator:

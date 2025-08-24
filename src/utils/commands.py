@@ -65,118 +65,6 @@ Available models:
   compound-beta           - AI with tools (slower, more capable)
   compound-beta-mini      - AI with tools (faster)"""
 
-class TemplateCommand(Command):
-    """Use predefined prompt templates."""
-    
-    def __init__(self, cli_instance):
-        super().__init__(cli_instance)
-        self.templates = {
-            "code_review": "Please review this code and suggest improvements:\n\n{code}",
-            "explain": "Explain the following concept in simple terms:\n\n{concept}",
-            "translate": "Translate the following text to {language}:\n\n{text}",
-            "summarize": "Please provide a concise summary of:\n\n{content}",
-            "debug": "Help me debug this code. Here's the error and code:\n\nError: {error}\n\nCode:\n{code}",
-            "optimize": "Suggest optimizations for this code:\n\n{code}",
-        }
-    
-    def execute(self, args: str) -> Optional[str]:
-        parts = args.split(' ', 1)
-        if len(parts) < 1 or not parts[0]:
-            self.list_templates()
-            return None
-        
-        template_name = parts[0]
-        if template_name not in self.templates:
-            self.console.print(f"[red]Unknown template: {template_name}[/red]")
-            self.list_templates()
-            return None
-        
-        # Return the template for the CLI to process
-        return self.templates[template_name]
-    
-    def list_templates(self):
-        """List available templates."""
-        self.console.print("[bold]Available templates:[/bold]")
-        for name, template in self.templates.items():
-            preview = template[:50].replace('\n', ' ') + "..." if len(template) > 50 else template
-            self.console.print(f"  [cyan]{name}[/cyan]: {preview}")
-    
-    def get_help(self) -> str:
-        return """Use predefined prompt templates.
-Usage:
-  template                 - List available templates
-  template <name>         - Use specific template
-  
-Templates support placeholders like {code}, {concept}, etc.
-You'll be prompted to fill in the placeholders."""
-
-class ExportCommand(Command):
-    """Export conversation to different formats."""
-    
-    def execute(self, args: str) -> Optional[str]:
-        parts = args.split(' ', 1)
-        if len(parts) < 2:
-            self.console.print("[red]Usage: export <format> <filename>[/red]")
-            self.console.print("Available formats: json, md, txt, pdf")
-            return None
-        
-        format_type, filename = parts
-        
-        if format_type == "json":
-            self.cli.save_conversation(filename)
-        elif format_type == "md":
-            self.export_markdown(filename)
-        elif format_type == "txt":
-            self.export_text(filename)
-        elif format_type == "pdf":
-            self.export_pdf(filename)
-        else:
-            self.console.print(f"[red]Unsupported format: {format_type}[/red]")
-        
-        return None
-    
-    def export_markdown(self, filename: str):
-        """Export conversation as Markdown."""
-        try:
-            with open(filename, 'w') as f:
-                f.write("# Conversation Export\n\n")
-                for i, msg in enumerate(self.cli.messages):
-                    role = msg['role'].capitalize()
-                    content = msg['content']
-                    f.write(f"## {role} {i//2 + 1}\n\n{content}\n\n")
-            self.console.print(f"[green]✅ Exported to Markdown: {filename}[/green]")
-        except Exception as e:
-            self.console.print(f"[red]Export failed: {str(e)}[/red]")
-    
-    def export_text(self, filename: str):
-        """Export conversation as plain text."""
-        try:
-            with open(filename, 'w') as f:
-                for msg in self.cli.messages:
-                    f.write(f"{msg['role'].upper()}: {msg['content']}\n\n")
-            self.console.print(f"[green]✅ Exported to text: {filename}[/green]")
-        except Exception as e:
-            self.console.print(f"[red]Export failed: {str(e)}[/red]")
-    
-    def export_pdf(self, filename: str):
-        """Export conversation as PDF (requires fpdf2)."""
-        try:
-            # This would require fpdf2 to be installed
-            self.console.print("[yellow]PDF export requires 'pip install fpdf2'[/yellow]")
-            # Implementation would go here
-        except Exception as e:
-            self.console.print(f"[red]PDF export failed: {str(e)}[/red]")
-    
-    def get_help(self) -> str:
-        return """Export conversation to different formats.
-Usage:
-  export <format> <filename>
-  
-Supported formats:
-  json    - JSON format (same as 'save' command)
-  md      - Markdown format
-  txt     - Plain text format
-  pdf     - PDF format (requires fpdf2)"""
 
 class CommandHandler:
     """Handles command routing and execution."""
@@ -186,10 +74,17 @@ class CommandHandler:
         self.commands: Dict[str, Command] = {
             'help': HelpCommand(cli_instance),
             'model': ModelCommand(cli_instance),
-            'template': TemplateCommand(cli_instance),
-            'export': ExportCommand(cli_instance),
             # Add more commands here
         }
+        
+        # Import and add command palette
+        try:
+            from utils.command_palette import create_command_palette_command
+            self.commands['palette'] = create_command_palette_command(cli_instance)
+        except (ImportError, Exception) as e:
+            # Graceful fallback if command palette dependencies are not available
+            # or if there are circular import issues
+            pass
     
     def execute(self, user_input: str) -> Optional[str]:
         """Execute a command and return any template or None."""

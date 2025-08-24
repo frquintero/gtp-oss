@@ -112,94 +112,36 @@ class GPTCLI:
                     if not ch:
                         continue
 
-                    # If user types '/' as the first character, open the command palette
-                    # and insert the selected candidate into the current buffer.
-                    if ch == '/' and not buffer:
-                        # Echo the '/' character first
-                        sys.stdout.write('/')
-                        sys.stdout.flush()
-                        buffer.append('/')
-                        
-                        # No need to wait for '/' rendering - command palette will position cursor correctly
-                        
-                        # Import the command palette module
-                        # Try different import paths for flexibility
-                        open_palette = None
-                        
-                        try:
-                            # First try absolute import path
-                            from src.ui.command_palette import open_palette
-                        except ImportError:
-                            try:
-                                # Then try relative import path
-                                from ui.command_palette import open_palette
-                            except ImportError:
-                                open_palette = None
-                        
-                        if open_palette:
-                            # Restore terminal to normal mode for the palette
-                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                            
-                            candidates = [
-                                "help",
-                                "new",
-                                "clear",
-                                "history",
-                                "save",
-                                "load",
-                                "list",
-                                "export",
-                                "template",
-                                "model openai/gpt-oss-20b",
-                            ]
-                            
-                            try:
-                                # The open_palette function will handle displaying the palette
-                                # and letting the user select with arrow keys
-                                sel = open_palette(candidates)
-                                
-                                # Re-enter raw mode for continued editing
-                                tty.setraw(fd)
-                                
-                                # Clear the line and redraw prompt
-                                sys.stdout.write("\r>> ")
-                                sys.stdout.write("\033[K")  # Clear line from cursor position
-                                sys.stdout.flush()
-                                
-                                if sel:
-                                    # Reset buffer with just the selection (no /)
-                                    buffer = []
-                                    sys.stdout.write(sel)
-                                    sys.stdout.flush()
-                                    buffer.extend(list(sel))
-                                else:
-                                    # If no selection or cancelled, just go back to empty prompt
-                                    buffer = []
-                            except Exception as e:
-                                # If any error occurs, go back to raw mode and report
-                                tty.setraw(fd)
-                                sys.stdout.write(f"\r>> [ERROR: {str(e)}]")
-                                sys.stdout.flush()
-                                buffer = []
-                            
-                            continue
-                        else:
-                            # Inform the user that the palette isn't available
-                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                            sys.stdout.write("\n\nCommand palette not available - module not found\n")
-                            sys.stdout.flush()
-                            
-                            # Re-enter raw mode and redraw prompt with '/'
-                            tty.setraw(fd)
-                            sys.stdout.write(">> /")
-                            sys.stdout.flush()
-                            continue
-
                     # Ctrl+C -> quit the application
                     if ch == "\x03":
                         # restore terminal before raising so shell remains usable
                         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
                         raise KeyboardInterrupt
+
+                    # "/" -> open command palette (only if it's the first character)
+                    if ch == "/" and not buffer:
+                        # Restore terminal first
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                        try:
+                            # Clear current line and open command palette
+                            sys.stdout.write("\r\033[K")  # Clear current line
+                            sys.stdout.flush()
+                            
+                            # Open command palette
+                            result = self._open_command_palette()
+                            if result == "exit":
+                                return None  # Signal to exit
+                            
+                            # Restore terminal for continued input
+                            tty.setraw(fd)
+                            sys.stdout.write(">> " + ''.join(buffer))
+                            sys.stdout.flush()
+                        except Exception as e:
+                            # Restore terminal and continue
+                            tty.setraw(fd)
+                            sys.stdout.write(">> " + ''.join(buffer))
+                            sys.stdout.flush()
+                        continue
 
                     # Enter/Return (carriage return) -> submit
                     # Note: many terminals send '\r' (13) for Enter; treat that as submit.
@@ -258,6 +200,32 @@ class GPTCLI:
             return None
 
         return content
+    
+    def _open_command_palette(self):
+        """Open the command palette interface."""
+        try:
+            from utils.command_palette import CommandPalette
+            
+            # Create and show the command palette
+            palette = CommandPalette(self)
+            selected_item = palette.show()
+            
+            if selected_item:
+                # Execute the selected command
+                palette.execute_command(selected_item)
+                
+                # Check if it was an exit command
+                if selected_item.name == "exit":
+                    return "exit"
+            
+            return "continue"
+            
+        except ImportError:
+            self.console.print("[yellow]Command palette not available. Use 'palette' command instead.[/yellow]")
+            return "continue"
+        except Exception as e:
+            self.console.print(f"[red]Error opening command palette: {str(e)}[/red]")
+            return "continue"
     
     def stream_response(self, model: str = None):
         """Stream response with enhanced UI."""

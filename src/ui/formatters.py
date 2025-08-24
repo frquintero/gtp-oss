@@ -161,3 +161,99 @@ class MarkdownProcessor:
             toc_lines.append(f"{indent}- [{title}](#{anchor})")
         
         return '\n'.join(toc_lines)
+
+
+class MathFormatter:
+    r"""Selective math transformer: only process math inside $...$ or \[...\].
+
+    This makes a conservative, readable conversion of common LaTeX
+    constructs into Unicode or simple ASCII approximations so math
+    displays nicely in terminal Markdown without breaking non-math text.
+    """
+
+    GREEK = {
+        r"\\alpha": "α",
+        r"\\beta": "β",
+        r"\\gamma": "γ",
+        r"\\delta": "δ",
+        r"\\theta": "θ",
+        r"\\lambda": "λ",
+        r"\\pi": "π",
+        r"\\sigma": "σ",
+        r"\\phi": "φ",
+        r"\\omega": "ω",
+    }
+
+    @staticmethod
+    def _transform_expr(expr: str) -> str:
+        # Handle simple fractions \frac{a}{b} -> (a)/(b)
+        def frac_repl(m):
+            num = m.group(1)
+            den = m.group(2)
+            return f"({num})/({den})"
+
+        # Unroll simple \frac occurrences
+        expr = re.sub(r'\\frac\{([^{}]+)\}\{([^{}]+)\}', frac_repl, expr)
+
+        # sqrt -> √(...)
+        expr = re.sub(r'\\sqrt\{([^{}]+)\}', lambda m: f"√({m.group(1)})", expr)
+
+        # simple command replacements (greek and common symbols)
+        replacements = {
+            r"\\times": "×",
+            r"\\cdot": "·",
+            r"\\leq": "≤",
+            r"\\geq": "≥",
+            r"\\neq": "≠",
+            r"\\pm": "±",
+        }
+
+        # apply greek
+        for k, v in MathFormatter.GREEK.items():
+            expr = re.sub(k, v, expr)
+
+        for k, v in replacements.items():
+            expr = re.sub(k, v, expr)
+
+        # remove remaining stray braces
+        expr = expr.replace('{', '').replace('}', '')
+
+        # collapse multiple spaces
+        expr = re.sub(r'\s+', ' ', expr).strip()
+        return expr
+
+    @staticmethod
+    def transform_math_regions(text: str) -> str:
+        r"""Find inline ($...$) and display (\[...\]) math regions and
+        transform their contents, leaving other text untouched.
+
+        The delimiters are removed and replaced with the transformed content
+        so Markdown rendering doesn't attempt to interpret LaTeX.
+        """
+        if not text:
+            return text
+
+        # handle display math \[ ... \]
+        def display_repl(m):
+            inner = m.group(1)
+            return MathFormatter._transform_expr(inner)
+
+        text = re.sub(r"\\\[(.+?)\\\]", display_repl, text, flags=re.DOTALL)
+
+        # handle inline math $...$
+        def inline_repl(m):
+            inner = m.group(1)
+            return MathFormatter._transform_expr(inner)
+
+        text = re.sub(r"\$(.+?)\$", inline_repl, text, flags=re.DOTALL)
+
+        return text
+
+    @staticmethod
+    def clean_latex_math(text: str) -> str:
+        """Compatibility wrapper used by existing tests and callers.
+
+        Delegates to transform_math_regions which implements the conservative
+        math-region-only transformation.
+        """
+        return MathFormatter.transform_math_regions(text)

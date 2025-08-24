@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from rich.panel import Panel
 from rich.text import Text
 from rich.markdown import Markdown
+from src.ui.formatters import MathFormatter
 from rich.table import Table
 from rich.console import Console
 
@@ -34,9 +35,11 @@ class PanelFactory:
         """Create panel for response content with Markdown support."""
         if not content:
             return None
-        
+        # Apply conservative math transformation only on explicit math regions
+        safe_content = MathFormatter.transform_math_regions(content)
+
         return Panel(
-            Markdown(content, code_theme="monokai"),
+            Markdown(safe_content, code_theme="monokai"),
             title="[bold]✨ Response[/bold]",
             border_style="green",
             padding=(1, 2)
@@ -117,6 +120,7 @@ class TableFactory:
         commands = [
             ("help", "Show this help message"),
             ("help <command>", "Show help for specific command"),
+            ("palette", "Open command palette for quick access"),
             ("new", "Start a new chat session"),
             ("clear", "Clear conversation history"),
             ("history", "Show conversation history"),
@@ -129,9 +133,10 @@ class TableFactory:
             ("load doc <file>", "Load document into prompt"),
             ("export <format> <file>", "Export conversation"),
             ("list", "List saved conversations"),
-            ("exit/quit", "Exit the application"),
+            ("exit/quit", "Exit the application (or use Ctrl+C to quit)"),
             ("", "Enter message line by line, press Enter on empty line to submit"),
-            ("", "Press Ctrl+C to cancel input or stop response")
+            ("", "Press Ctrl+C to cancel input or stop response"),
+            ("", "Press / at start of line to open command palette")
         ]
         
         for command, description in commands:

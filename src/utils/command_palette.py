@@ -186,7 +186,7 @@ class CommandPalette:
     
     def _show_about(self):
         """Show application information."""
-        about_text = """[bold]GPT CLI Enhanced v2.1[/bold]
+        about_text = """[bold]GPT CLI Enhanced v2.2[/bold]
 
 A modern command-line interface for interacting with GPT models.
 
@@ -333,6 +333,16 @@ Type [cyan]help[/cyan] for available commands."""
             if self.filtered_items:
                 self.selected_index = max(0, self.selected_index - 5)
         
+        @kb.add('backspace')
+        def _(event):
+            """Handle backspace - cancel if buffer is empty."""
+            if len(search_buffer.text) == 0:
+                # If buffer is empty, treat backspace as cancel
+                event.app.exit()
+            else:
+                # Otherwise, handle backspace normally
+                search_buffer.delete_before_cursor()
+        
         return kb
     
     def show(self) -> Optional[CommandPaletteItem]:
@@ -366,19 +376,24 @@ Type [cyan]help[/cyan] for available commands."""
             # Run the application
             result = self.app.run()
             
-            # If a command was selected, clear the palette display
-            if result:
-                # Calculate how many lines the palette used
-                num_palette_lines = len(self.filtered_items) + 2  # items + search line + buffer
-                
-                # Move cursor up to where the search started
-                import sys
-                sys.stdout.write(f"\033[{num_palette_lines}A")  # Move up
-                sys.stdout.write("\033[J")  # Clear from cursor to end of screen
-                sys.stdout.flush()
+            # Always clear the palette display (whether command selected or cancelled)
+            # Calculate how many lines the palette used
+            num_palette_lines = len(self.filtered_items) + 2  # items + search line + buffer
+            
+            # Move cursor up to where the search started
+            import sys
+            sys.stdout.write(f"\033[{num_palette_lines}A")  # Move up
+            sys.stdout.write("\033[J")  # Clear from cursor to end of screen
+            sys.stdout.flush()
             
             return result
         except KeyboardInterrupt:
+            # Clean up on Ctrl+C as well
+            num_palette_lines = len(self.filtered_items) + 2
+            import sys
+            sys.stdout.write(f"\033[{num_palette_lines}A")
+            sys.stdout.write("\033[J")
+            sys.stdout.flush()
             return None
         finally:
             # Don't clear screen - preserve existing content

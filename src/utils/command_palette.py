@@ -3,17 +3,11 @@
 import sys
 from typing import List, Dict, Callable, Optional, Tuple
 from prompt_toolkit import Application
-from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.document import Document
-from prompt_toolkit.filters import Condition
-from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.layout import Layout
-from prompt_toolkit.widgets import Frame
-from prompt_toolkit.shortcuts import clear
 from rich.console import Console
 import re
 
@@ -270,12 +264,9 @@ Type [cyan]help[/cyan] for available commands."""
         
         # Create layout
         root_container = HSplit([
-            Frame(
-                Window(
-                    BufferControl(buffer=search_buffer),
-                    height=1,
-                ),
-                title="Command Palette - Type to search, ↑↓ to navigate, Enter to execute, Esc to cancel"
+            Window(
+                BufferControl(buffer=search_buffer),
+                height=1,
             ),
             Window(
                 results_control,
@@ -359,8 +350,8 @@ Type [cyan]help[/cyan] for available commands."""
         self.app = Application(
             layout=layout,
             key_bindings=kb,
-            full_screen=True,
-            mouse_support=True,
+            full_screen=False,  # Don't take over entire screen
+            mouse_support=False,  # Disable mouse in inline mode
         )
         
         # Define styles
@@ -374,20 +365,30 @@ Type [cyan]help[/cyan] for available commands."""
         try:
             # Run the application
             result = self.app.run()
+            
+            # If a command was selected, clear the palette display
+            if result:
+                # Calculate how many lines the palette used
+                num_palette_lines = len(self.filtered_items) + 2  # items + search line + buffer
+                
+                # Move cursor up to where the search started
+                import sys
+                sys.stdout.write(f"\033[{num_palette_lines}A")  # Move up
+                sys.stdout.write("\033[J")  # Clear from cursor to end of screen
+                sys.stdout.flush()
+            
             return result
         except KeyboardInterrupt:
             return None
         finally:
-            # Clear screen after palette closes
-            clear()
+            # Don't clear screen - preserve existing content
+            pass
     
     def execute_command(self, item: CommandPaletteItem):
         """Execute a command item."""
         try:
-            # Clear the palette display
-            clear()
-            
-            # Execute the command
+            # The palette display has already been cleared in show()
+            # Just execute the command - output will appear where palette was
             item.action()
             
         except Exception as e:

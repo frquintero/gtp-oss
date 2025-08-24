@@ -3,7 +3,7 @@ from typing import List, Optional, Dict, Any
 from rich.panel import Panel
 from rich.text import Text
 from rich.markdown import Markdown
-from src.ui.formatters import MathFormatter
+from .formatters import MathFormatter
 from rich.table import Table
 from rich.console import Console
 

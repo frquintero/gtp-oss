@@ -1,5 +1,5 @@
 #!/bin/bash
-# GPT CLI - Enhanced Version Launcher
+# GPT CLI Enhanced v2.1 - Launcher
 
 # Get the directory where this script is located
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -15,5 +15,5 @@ fi
 cd "$DIR"
 
 # Use the enhanced version
-echo "Starting GPT CLI Enhanced..."
+echo "Starting GPT CLI Enhanced v2.1..."
 $PYTHON gpt.py "$@"

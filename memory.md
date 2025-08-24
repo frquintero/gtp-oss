@@ -1,4 +1,19 @@
-## Recent changes (Aug 23, 2025)
+## Recent changes (Aug 24, 2025)
+
+### Cross-Terminal Command Palette Compatibility
+- Completely rewrote the command palette to work in all terminal types:
+  - Fixed cursor positioning issues in Konsole and other non-VSCode terminals
+  - Implemented a more robust terminal-agnostic approach using standard ANSI codes
+  - Eliminated terminal-specific behaviors for consistent experience
+  - Added better screen clearing and redrawing for smoother visuals
+  - Ensured cursor stays in the correct position in all terminal types
+
+### Version Update
+- Updated version to 2.1.0 to differentiate from globally installed version
+- Updated version strings in:
+  - CLI welcome message
+  - Package metadata
+  - Launcher script
 
 ### Command Palette Improvements
 - Fixed critical bugs and enhanced the command palette in `src/ui/command_palette.py`:

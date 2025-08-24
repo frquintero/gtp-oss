@@ -56,7 +56,7 @@ class GPTCLI:
     def display_welcome(self):
         """Display compact welcome message."""
         # compact single-line welcome; extended help available with 'help'
-        text = "GPT CLI Enhanced v2.0 — chat with models (type 'help' for commands)"
+        text = "GPT CLI Enhanced v2.1 — chat with models (type 'help' for commands)"
         try:
             panel = self.panel_factory.create_info_panel(text, title="")
             self.console.print(panel)

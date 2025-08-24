@@ -10,7 +10,7 @@ Features:
 - Prefix-based filtering with fallback to substring
 - Maintains cursor position at the input line
 - Clean visual display below the prompt
-- Cross-platform terminal handling
+- Cross-platform terminal handling (VSCode, Konsole, etc.)
 
 Usage:
     result = open_palette(candidates)
@@ -61,9 +61,6 @@ def open_palette(candidates: List[str]) -> Optional[str]:
     # Get terminal width for proper formatting
     terminal_width = shutil.get_terminal_size().columns
     
-    # Max length of candidates for formatting
-    max_length = max(len(c) for c in candidates) + 4  # +4 for arrow and spaces
-    
     # Current selection index
     selected = 0
     
@@ -73,23 +70,21 @@ def open_palette(candidates: List[str]) -> Optional[str]:
     # Filtered candidates
     filtered = candidates.copy()
     
-    # Save cursor position at the beginning of the line (right after '/')
-    sys.stdout.write("\033[G")  # Move to beginning of line
-    sys.stdout.write("\033[1C")  # Move cursor 1 character right (after the '/')
-    sys.stdout.write("\033[s")  # Save this position
-    sys.stdout.flush()
-    
-    # Variable to track cursor position
-    cursor_saved = True
+    # Use a more terminal-agnostic approach
+    # First draw the palette with empty filter
+    sys.stdout.write("\n\n")  # Move down two lines for the palette
     
     try:
         while True:
-            # Move to new line for the palette (only the first time or after restoring cursor)
-            if cursor_saved:
-                sys.stdout.write("\n\n")
-                cursor_saved = False
+            # Calculate the number of lines in the current display
+            num_lines = len(filtered) + 3  # Commands + header + footer + input line
             
-            # Clear previous output (clear lines below cursor)
+            # Move cursor to the beginning of the palette area
+            sys.stdout.write("\r")  # Move to start of line
+            # Go up to the first line of the palette (if not the first draw)
+            sys.stdout.write("\033[{}A".format(num_lines - 1))
+            
+            # Clear from cursor to end of screen
             sys.stdout.write("\033[J")
             
             # Update filtered list based on filter text
@@ -122,21 +117,12 @@ def open_palette(candidates: List[str]) -> Optional[str]:
             else:
                 sys.stdout.write("\n↑↓: Navigate, Enter: Select, Esc: Cancel, Type to filter\n")
             
-            # Go back to prompt position and redisplay the / and filter text
-            # Don't append each keystroke, just redraw the entire input line
-            sys.stdout.write("\033[u")  # Restore cursor position to original position
-            sys.stdout.write("\033[K")  # Clear line from cursor position to end
-            sys.stdout.write(f"/{filter_text}")  # Show / and any filter text
+            # Draw input line with current filter text
+            sys.stdout.write(f">> /{filter_text}")
             sys.stdout.flush()
             
-            # Get user input without displaying it
+            # Get user input without echo
             ch = _getch()
-            
-            # Save cursor position again for next iteration
-            # Position is saved at the beginning where the prompt is
-            sys.stdout.write("\033[u")  # Go back to saved position
-            sys.stdout.write("\033[s")  # Save this position again
-            cursor_saved = True
             
             # Handle navigation
             if ch == '\x1b':  # ESC or arrow key
@@ -161,31 +147,23 @@ def open_palette(candidates: List[str]) -> Optional[str]:
             # Backspace - delete from filter
             elif ch in ('\x7f', '\x08'):
                 if filter_text:
-                    # Remove last character from filter but don't do visual feedback here
-                    # (the entire line will be redrawn)
+                    # Remove last character from filter
                     filter_text = filter_text[:-1]
                     selected = 0  # Reset selection when filter changes
                 continue
             
             # Printable character - add to filter
             elif 32 <= ord(ch) < 127:
-                # Add character to filter but don't display it here
-                # (it will be shown when we redraw the entire line)
+                # Add character to filter
                 filter_text += ch
                 selected = 0  # Reset selection when filter changes
                 continue
             
     finally:
-        # Restore cursor position to prompt and clear everything below
-        sys.stdout.write("\033[u")  # Restore cursor position
-        sys.stdout.write("\033[K")  # Clear line from cursor position to end
-        sys.stdout.write("\033[J")  # Clear everything below cursor
+        # Clear palette area
+        sys.stdout.write("\r\033[J")  # Clear from cursor to end of screen
+        sys.stdout.write(f">> /{filter_text}")  # Redraw input line
         sys.stdout.flush()
-        
-        # If we have a filter text, display it so it's there when we return
-        if filter_text:
-            sys.stdout.write(filter_text)
-            sys.stdout.flush()
 
 # Test function for running the palette directly
 if __name__ == '__main__':

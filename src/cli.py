@@ -237,6 +237,27 @@ class GPTCLI:
                             sys.stdout.flush()
                         continue
 
+                    # Handle escape sequences (arrow keys, etc.) - ignore them
+                    if ch == "\x1b":  # ESC character starts escape sequences
+                        try:
+                            # Read the next character to see if it's a bracket
+                            next1 = sys.stdin.read(1)
+                            if next1 == "[":
+                                # Read the final character of the escape sequence
+                                next2 = sys.stdin.read(1)
+                                # Common escape sequences we want to ignore:
+                                # Arrow keys: A=up, B=down, C=right, D=left
+                                # Function keys, home, end, etc.
+                                # Just ignore all of them in the main input loop
+                                continue
+                            else:
+                                # If it's not a bracket, it might be Alt+key or other sequence
+                                # Just ignore the whole thing
+                                continue
+                        except:
+                            # If we can't read more characters, just ignore the escape
+                            continue
+
                     # Printable character -> echo and append
                     buffer.append(ch)
                     sys.stdout.write(ch)

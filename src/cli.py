@@ -8,7 +8,6 @@ from typing import Optional, Dict, Any, List
 from rich.console import Console
 from rich.live import Live
 from rich.console import Group
-from rich.prompt import Prompt
 
 # Configurar el path para las importaciones
 current_dir = Path(__file__).parent
@@ -55,14 +54,9 @@ class GPTCLI:
         
     def display_welcome(self):
         """Display compact welcome message."""
-        # compact single-line welcome; extended help available with 'help'
-        text = "GPT CLI Enhanced v2.2 — chat with models (type 'help' for commands)"
-        try:
-            panel = self.panel_factory.create_info_panel(text, title="")
-            self.console.print(panel)
-        except Exception:
-            # Fallback to plain print if panel creation fails
-            self.console.print(text)
+        # Two-line welcome message without frame
+        self.console.print("[bold cyan]GPT CLI Enhanced[/bold cyan]")
+        self.console.print("To get started, describe a task or press [cyan]/[/cyan] for commands")
 
     def display_status_bar(self):
         """Print a minimal status bar with current model and stream hint."""
@@ -74,6 +68,31 @@ class GPTCLI:
         except Exception:
             print(status)
 
+    def _print_help_message(self):
+        """Print the help message below the current cursor position at left margin."""
+        # Save current cursor position
+        sys.stdout.write("\033[s")
+        # Move to next line, go to column 1 (left margin), and clear line
+        sys.stdout.write("\n\033[1G\033[2K")
+        # Print help with colored commands
+        sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m/\033[90m = command)\033[0m")
+        # Restore cursor position
+        sys.stdout.write("\033[u")
+        sys.stdout.flush()
+
+    def _reset_ctrl_c_state_and_restore_help(self):
+        """Reset Ctrl+C state and restore original help message."""
+        # Clear quit confirmation message and restore help
+        sys.stdout.write("\n\033[1G\033[2K")  # Move down, go to left margin, clear line
+        sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m/\033[90m = command)\033[0m")
+        # Calculate current buffer length to position cursor correctly
+        buffer_text = ''.join(getattr(self, '_current_buffer', []))
+        sys.stdout.write("\033[1A\033[{}G".format(len(">> " + buffer_text) + 1))  # Move back up and position after current text
+        sys.stdout.flush()
+        return False  # Return False to reset ctrl_c_pressed_once
+
+
+
     def get_multiline_input(self, prefill_text: str = "") -> Optional[str]:
         """Get input using raw mode where:
         - Enter (Return) sends the prompt to the LLM
@@ -83,8 +102,10 @@ class GPTCLI:
         This uses low-level terminal control so blank lines are allowed in the
         message via Ctrl+J and a single Enter submits immediately.
         """
-        self.console.print("[dim]Enter your message (Enter = send, Ctrl+J = newline, Ctrl+C = quit):[/dim]")
-
+        
+        # State tracking for Ctrl+C behavior
+        ctrl_c_pressed_once = False
+        
         # Show any prefill content and initialize buffer
         buffer: list[str] = []
         if prefill_text:
@@ -106,17 +127,38 @@ class GPTCLI:
                 tty.setraw(fd)
                 sys.stdout.write(">> ")
                 sys.stdout.flush()
+                
+                # Print help message below the prompt
+                self._print_help_message()
 
                 while True:
                     ch = sys.stdin.read(1)
                     if not ch:
                         continue
 
-                    # Ctrl+C -> quit the application
+                    # Ctrl+C -> two-step quit mechanism
                     if ch == "\x03":
-                        # restore terminal before raising so shell remains usable
-                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                        raise KeyboardInterrupt
+                        if ctrl_c_pressed_once:
+                            # Second Ctrl+C -> quit silently with cleanup
+                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                            sys.stdout.write("\n\033[2K\r")
+                            sys.stdout.flush()
+                            raise KeyboardInterrupt
+                        else:
+                            # First Ctrl+C -> show quit confirmation message
+                            ctrl_c_pressed_once = True
+                            # Clear help message line and replace with quit confirmation
+                            sys.stdout.write("\n\033[1G\033[2K")  # Move down, go to left margin, clear line
+                            sys.stdout.write("\033[91mCtrl+C again to quit\033[0m")  # Red color for attention
+                            sys.stdout.write("\033[1A\033[{}G".format(len(">> " + ''.join(buffer)) + 1))  # Move back up and position after current text
+                            sys.stdout.flush()
+                        continue
+
+                    # Reset Ctrl+C state if any other key is pressed
+                    if ctrl_c_pressed_once:
+                        ctrl_c_pressed_once = self._reset_ctrl_c_state_and_restore_help()
+                        # Store current buffer for cursor positioning
+                        self._current_buffer = buffer
 
                     # "/" -> open command palette (only if it's the first character)
                     if ch == "/" and not buffer:
@@ -136,25 +178,54 @@ class GPTCLI:
                             tty.setraw(fd)
                             sys.stdout.write(">> " + ''.join(buffer))
                             sys.stdout.flush()
+                            # Restore help message
+                            self._print_help_message()
                         except Exception as e:
                             # Restore terminal and continue
                             tty.setraw(fd)
                             sys.stdout.write(">> " + ''.join(buffer))
                             sys.stdout.flush()
+                            # Restore help message
+                            self._print_help_message()
                         continue
 
-                    # Enter/Return (carriage return) -> submit
+                    # Enter/Return (carriage return) -> submit or reposition if empty
                     # Note: many terminals send '\r' (13) for Enter; treat that as submit.
                     if ch == "\r" or ord(ch) == 13:
-                        sys.stdout.write("\n")
-                        sys.stdout.flush()
-                        break
+                        # Check if buffer is empty (no content to send)
+                        if not buffer or not ''.join(buffer).strip():
+                            # Empty line - just reposition cursor to after ">>"
+                            # Clear current line and rewrite the prompt
+                            sys.stdout.write("\r\033[K>> ")
+                            sys.stdout.flush()
+                            # Clear buffer if it had whitespace
+                            buffer = []
+                            continue
+                        else:
+                            # Has content - submit normally
+                            sys.stdout.write("\n")
+                            sys.stdout.flush()
+                            break
 
                     # Ctrl+J (line feed, ASCII 10) -> insert newline into message
                     if ch == "\x0a":
-                        buffer.append('\n')
-                        sys.stdout.write("\n>> ")
-                        sys.stdout.flush()
+                        # Only allow newline if there's content in the buffer
+                        if buffer and ''.join(buffer).strip():
+                            buffer.append('\n')
+                            # First, clear the help message that's currently below the cursor
+                            sys.stdout.write("\n\033[2K")  # Move down and clear the help message line
+                            sys.stdout.write("\033[1A")   # Move back up to the original line
+                            # Now move to new line and print clean prompt at left margin
+                            sys.stdout.write("\r\n>> ")
+                            # Save cursor position (after the new clean ">> ")
+                            sys.stdout.write("\033[s")
+                            # Move down and print help message on the line below
+                            sys.stdout.write("\n\033[1G\033[2K")  # New line, go to left margin, clear line
+                            sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m/\033[90m = command)\033[0m")
+                            # Restore cursor position to after the new clean ">>"
+                            sys.stdout.write("\033[u")
+                            sys.stdout.flush()
+                        # If buffer is empty, ignore the Ctrl+J
                         continue
 
                     # Backspace handling
@@ -179,8 +250,11 @@ class GPTCLI:
                     pass
 
         except KeyboardInterrupt:
-            # User requested quit via Ctrl+C
-            self.console.print("\n[yellow]Exiting...[/yellow]")
+            # User requested quit via Ctrl+C - clean up and exit silently
+            import sys
+            # Clear any remaining content and position cursor properly
+            sys.stdout.write("\n\033[2K\r")  # New line, clear line, return to start
+            sys.stdout.flush()
             # Re-raise so outer run loop can exit
             raise
         except Exception:
@@ -303,18 +377,8 @@ class GPTCLI:
         command = cmd_info['command']
         args = cmd_info['args']
         
-        # Built-in commands that need special handling
-        if command == 'help':
-            if args:
-                # Help for specific command
-                self.command_handler.execute(user_input)
-            else:
-                # General help
-                help_table = self.table_factory.create_help_table()
-                self.console.print(help_table)
-            return True
-        
-        elif command == 'new':
+        # Built-in commands
+        if command == 'new':
             self.conversation = Conversation()
             self.current_model = self.config.get('default_model', 'openai/gpt-oss-20b')
             self.console.print("[green]✅ Started new chat session.[/green]")
@@ -359,7 +423,7 @@ class GPTCLI:
         
         # Unknown command
         self.console.print(f"[red]Unknown command: {command}[/red]")
-        self.console.print("Type 'help' for available commands.")
+        self.console.print("Press [cyan]/[/cyan] to see available commands.")
         return True
     
     def run(self):
@@ -387,7 +451,10 @@ class GPTCLI:
                 self.stream_response()
                 
             except KeyboardInterrupt:
-                self.console.print("\n[yellow]Exiting...[/yellow]")
+                # Clean exit - clear any remaining output
+                import sys
+                sys.stdout.write("\033[2K\r")  # Clear line and return to start
+                sys.stdout.flush()
                 break
             except Exception as e:
                 error_panel = self.panel_factory.create_error_panel(f"Unexpected error: {str(e)}")
@@ -400,7 +467,8 @@ def main():
         cli = GPTCLI()
         cli.run()
     except KeyboardInterrupt:
-        print("\nGoodbye!")
+        # Exit silently - no goodbye message
+        pass
     except Exception as e:
         print(f"Fatal error: {e}")
         sys.exit(1)

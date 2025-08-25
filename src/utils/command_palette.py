@@ -120,8 +120,6 @@ class CommandPalette:
                         lambda: self.cli.handle_command("history"), "Chat", "Ctrl+H")
         
         # Model commands
-        self.add_command("model:default", "Switch to default model", 
-                        lambda: self.cli.handle_command("model"), "Models")
         self.add_command("model:gpt-oss-20b", "Switch to GPT OSS 20B model", 
                         lambda: self.cli.handle_command("model openai/gpt-oss-20b"), "Models")
         self.add_command("model:gpt-oss-120b", "Switch to GPT OSS 120B model", 
@@ -137,12 +135,6 @@ class CommandPalette:
         self.add_command("about", "Show application information", 
                         lambda: self._show_about(), "Quick Actions")
         
-        # Help commands
-        self.add_command("help", "Show general help", 
-                        lambda: self.cli.handle_command("help"), "Help", "F1")
-        self.add_command("help:commands", "Show available commands", 
-                        lambda: self._show_command_list(), "Help")
-        
         # System commands
         self.add_command("exit", "Exit the application", 
                         lambda: self._exit_app(), "System", "Ctrl+Q")
@@ -151,7 +143,7 @@ class CommandPalette:
         try:
             if hasattr(self.cli, 'command_handler') and hasattr(self.cli.command_handler, 'commands'):
                 for cmd_name, cmd_obj in self.cli.command_handler.commands.items():
-                    if cmd_name not in ["help", "palette"]:  # Skip help and palette to avoid duplicates
+                    if cmd_name not in ["help", "palette", "model"]:  # Skip help, palette, and model to avoid duplicates
                         self.add_command(
                             cmd_name, 
                             cmd_obj.get_help().split('\n')[0] if hasattr(cmd_obj, 'get_help') else f"Execute {cmd_name} command",
@@ -186,7 +178,7 @@ class CommandPalette:
     
     def _show_about(self):
         """Show application information."""
-        about_text = """[bold]GPT CLI Enhanced v2.2[/bold]
+        about_text = """[bold]GPT CLI Enhanced v2.2.1[/bold]
 
 A modern command-line interface for interacting with GPT models.
 
@@ -201,25 +193,7 @@ Press [cyan]/[/cyan] at start of line to open command palette anytime.
 Type [cyan]help[/cyan] for available commands."""
         
         self.console.print(about_text)
-    
-    def _show_command_list(self):
-        """Show list of all available commands."""
-        self.console.print("[bold]Available Commands:[/bold]")
-        
-        # Group commands by category
-        categories = {}
-        for item in self.items:
-            if item.category not in categories:
-                categories[item.category] = []
-            categories[item.category].append(item)
-        
-        for category, items in categories.items():
-            self.console.print(f"\n[bold cyan]{category}:[/bold cyan]")
-            for item in items:
-                keybind = f" ({item.keybinding})" if item.keybinding else ""
-                self.console.print(f"  [green]{item.name}[/green]{keybind} - {item.description}")
-    
-    
+
     def _update_filtered_items(self, search_text: str):
         """Update the filtered items based on search text."""
         if not search_text.strip():

@@ -53,13 +53,12 @@ The command palette is the fastest way to access all functionality:
 - `new` - Start a new chat session
 - `clear` - Clear conversation history  
 - `history` - Show conversation history
-- `model:default` - Switch to default model
 - `model:gpt-oss-20b` - Switch to GPT OSS 20B model
 - `model:gpt-oss-120b` - Switch to GPT OSS 120B model
 - `model:compound-beta` - Switch to Compound Beta (with tools)
+- `model:compound-beta-mini` - Switch to Compound Beta Mini
 - `status` - Show current model and conversation status
 - `about` - Show application information
-- `help` - Show general help
 - `exit` - Exit the application
 
 ## 🎮 Basic Usage
@@ -72,12 +71,9 @@ The command palette is the fastest way to access all functionality:
 
 ### Using Commands
 ```bash
-# Traditional command typing
->> help
-
-# Or use the command palette
+# Use the streamlined command palette for all functionality
 >> /
-# (Opens interactive command palette)
+# (Opens interactive command palette with all available commands)
 ```
 
 ### Model Switching
@@ -102,115 +98,100 @@ export GPT_DEFAULT_MODEL="openai/gpt-oss-20b"  # Optional
 ```json
 {
   "default_model": "openai/gpt-oss-20b",
+  "groq_api_key": "your-api-key-here",
   "max_tokens": 4096,
-  "temperature": 0.7,
-  "stream": true
+  "temperature": 0.7
 }
 ```
 
-## 🤖 Available Models
+## 🔧 Technical Features
 
-### Standard Models
-- **openai/gpt-oss-20b** - Fast, efficient for most tasks
-- **openai/gpt-oss-120b** - More capable, slower responses
+### Command System
+- **Modular Architecture** - Easy to extend with new commands
+- **Fuzzy Search** - Smart matching for partial command names
+- **Category Organization** - Commands grouped by functionality
+- **Keyboard Navigation** - Full keyboard-driven interface
 
-### Compound AI Models (with Tools)
-- **compound-beta** - AI with web search and code execution
-- **compound-beta-mini** - Lighter version with basic tools
+### AI Models Supported
+- **openai/gpt-oss-20b** - Fast, efficient model for general use
+- **openai/gpt-oss-120b** - Larger model for complex tasks
+- **compound-beta** - AI with tools (web search, code execution)
+- **compound-beta-mini** - Faster version with tools
 
-## 📚 Commands Reference
+### Interface Features
+- **Rich Formatting** - Beautiful terminal output with colors and panels
+- **Streaming Responses** - Real-time response streaming
+- **Multiline Input** - Ctrl+J for newlines, Enter to send
+- **History Management** - Persistent conversation tracking
 
-### Chat Management
-- `new` - Start fresh conversation
-- `clear` - Clear message history
-- `history` - View conversation history
+## 🚀 Advanced Features
 
-### Model Control
-- `model` - Reset to default model
-- `model <name>` - Switch to specific model
-- `status` - Show current model and stats
+### Compound AI (Tools)
+When using compound models, the AI can:
+- Search the web for current information
+- Execute code snippets
+- Access external APIs
+- Perform complex multi-step tasks
 
-### Information
-- `help` - General help and commands
-- `about` - Application information
-- `palette` - Open command palette
+### Raw Input Mode
+- **Enter** - Send message immediately
+- **Ctrl+J** - Add newline to message
+- **Ctrl+C** - Exit application
+- **/** - Open command palette
 
-### System
-- `exit` or `Ctrl+C` - Exit application
+## 🏗️ Architecture
 
-## 🔧 Development
-
-### Project Structure
 ```
-gtp-oss/
-├── src/
-│   ├── cli.py              # Main CLI application
-│   ├── models/             # Data models
-│   ├── services/           # API clients
-│   ├── ui/                 # User interface components
-│   └── utils/              # Utilities and helpers
-├── tests/                  # Test files
-├── config.json            # Configuration
-├── requirements.txt       # Dependencies
-└── gpt                    # Launch script
+src/
+├── cli.py              # Main CLI application
+├── utils/
+│   ├── commands.py     # Command system
+│   ├── command_palette.py  # Command palette implementation
+│   ├── config.py       # Configuration management
+│   └── validators.py   # Input validation
+├── models/
+│   ├── conversation.py # Conversation management
+│   └── message.py      # Message handling
+├── services/
+│   ├── groq_client.py  # Groq API integration
+│   └── file_manager.py # File operations
+└── ui/
+    ├── panels.py       # UI panels and tables
+    └── formatters.py   # Text formatting
 ```
-
-### Running Tests
-```bash
-python -m pytest tests/
-```
-
-### Dependencies
-- `groq>=0.4.0` - Groq API client
-- `rich>=13.0.0` - Rich terminal formatting
-- `prompt_toolkit>=3.0.0` - Command palette functionality
-
-## 🆕 What's New in v2.2
-
-### Enhanced Command Palette
-- **Smart Backspace Cancellation**: Press backspace on empty search to cancel
-- **Improved Cleanup**: Palette always cleans up properly on exit
-- **Better UX**: More intuitive cancellation behavior
-
-### Previous Updates (v2.1)
-- Interactive command palette with fuzzy search
-- Keyboard navigation and shortcuts
-- Organized command categories
-- Terminal content preservation
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-## 📄 License
+## � Changelog
 
-MIT License - see LICENSE file for details.
+### v2.2.1 - UI Cleanup & Optimization
+- ✨ **Streamlined Command Palette** - Removed redundant commands (help, palette, model:default, commands)
+- 🧹 **Code Cleanup** - Removed unused imports and optimized dependencies
+- 💡 **Enhanced UX** - Simplified command structure while maintaining full functionality
+- 🎯 **Focused Interface** - Command palette now contains only essential, non-duplicate commands
 
-## 🐛 Troubleshooting
+### v2.2.0 - Command Palette Release
+- 🎯 **Command Palette** - Revolutionary `/` key access to all functionality
+- 🔍 **Fuzzy Search** - Smart command filtering and discovery
+- ⌨️ **Advanced Input** - Two-step Ctrl+C quit, clean Ctrl+J multiline handling
+- 🎨 **Enhanced Terminal** - Professional cursor management and clean exit behavior
 
-### Common Issues
+## �📝 License
 
-**Missing API Key**
-```bash
-Error: No API key found
-# Solution: Set your Groq API key
-export GROQ_API_KEY="your-key-here"
-```
+MIT License - see LICENSE file for details
 
-**Dependencies Not Found**
-```bash
-# Install all dependencies
-pip install -r requirements.txt
-```
+## 🔗 Links
 
-**Command Palette Not Working**
-- Ensure `prompt_toolkit>=3.0.0` is installed
-- Try typing `palette` as a command instead
+- [Groq Console](https://console.groq.com) - Get your API key
+- [Repository](https://github.com/frquintero/gtp-oss)
+- [Issues](https://github.com/frquintero/gtp-oss/issues)
 
 ---
 
-🚀 **Ready to chat with AI?** Run `./gpt` and start exploring!
+**Pro Tip**: Press `/` anytime at the prompt to access the command palette for the fastest workflow! 🚀

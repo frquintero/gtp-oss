@@ -20,25 +20,7 @@ class Command(ABC):
         """Return help text for this command."""
         pass
 
-class HelpCommand(Command):
-    """Display help information."""
-    
-    def execute(self, args: str) -> Optional[str]:
-        if args.strip():
-            # Show help for specific command
-            command = args.strip()
-            if command in self.cli.command_handler.commands:
-                help_text = self.cli.command_handler.commands[command].get_help()
-                self.console.print(f"[bold]Help for '{command}':[/bold]\n{help_text}")
-            else:
-                self.console.print(f"[red]Unknown command: {command}[/red]")
-        else:
-            # Show general help
-            self.cli.display_help()
-        return None
-    
-    def get_help(self) -> str:
-        return "Show help information. Use 'help <command>' for specific command help."
+
 
 class ModelCommand(Command):
     """Switch between different AI models."""
@@ -72,19 +54,11 @@ class CommandHandler:
     def __init__(self, cli_instance):
         self.cli = cli_instance
         self.commands: Dict[str, Command] = {
-            'help': HelpCommand(cli_instance),
             'model': ModelCommand(cli_instance),
             # Add more commands here
         }
         
-        # Import and add command palette
-        try:
-            from utils.command_palette import create_command_palette_command
-            self.commands['palette'] = create_command_palette_command(cli_instance)
-        except (ImportError, Exception) as e:
-            # Graceful fallback if command palette dependencies are not available
-            # or if there are circular import issues
-            pass
+        # NOTE: Command palette is accessed via "/" key - no need for separate command
     
     def execute(self, user_input: str) -> Optional[str]:
         """Execute a command and return any template or None."""

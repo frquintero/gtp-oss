@@ -17,5 +17,5 @@ fi
 cd "$DIR"
 
 # Use the enhanced version
-    echo "Starting GPT CLI Enhanced v2.2..."
+    echo "Starting GPT CLI Enhanced v2.2.1..."
     $PYTHON src/cli.py "$@"

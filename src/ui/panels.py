@@ -17,18 +17,21 @@ class PanelFactory:
     
     def create_reasoning_panel(self, reasoning: str) -> Panel:
         """Create panel for reasoning content."""
-        if not reasoning:
+        if not reasoning or not reasoning.strip():
             return None
         
-        lines = reasoning.split('\n')
-        panel_height = min(len(lines) + 2, self.max_height)
+        # Clean and prepare reasoning text
+        reasoning_text = reasoning.strip()
+        lines = reasoning_text.split('\n')
+        
+        # Don't truncate reasoning - show it all
+        display_text = '\n'.join(lines)
         
         return Panel(
-            Text('\n'.join(lines[-self.max_height:]), style="yellow"),
+            Text(display_text, style="yellow"),
             title="[bold]💭 Reasoning[/bold]",
             border_style="yellow",
-            padding=(1, 2),
-            height=panel_height
+            padding=(1, 2)
         )
     
     def create_response_panel(self, content: str) -> Panel:

@@ -347,8 +347,7 @@ class GPTCLI:
                                not model_info.get('supports_tools') and 
                                not force_non_streaming)
                 
-                # Debug: Show which path we're taking
-                self.console.print(f"[dim]Debug - Using streaming: {use_streaming}, Force non-streaming: {force_non_streaming}[/dim]")
+
                 
                 if use_streaming:
                     # Streaming response for models that support it (when reasoning doesn't require non-streaming)
@@ -388,18 +387,14 @@ class GPTCLI:
                 
                 else:
                     # Non-streaming response (for compound models, reasoning-enabled GPT-OSS, or when streaming disabled)
-                    if force_non_streaming and model_info.get('supports_reasoning'):
-                        live.update(self.panel_factory.create_info_panel("Processing with reasoning...", "Status"))
-                    else:
+                    # Only show status for compound models with tools (which are slower)
+                    if model_info.get('supports_tools'):
                         live.update(self.panel_factory.create_info_panel("Processing with AI tools...", "Status"))
                     
                     response_data = self.groq_client.get_non_stream_completion(api_messages, model)
                     content = response_data.get('content', '')
                     reasoning = response_data.get('reasoning')
                     executed_tools = response_data.get('executed_tools')
-                    
-                    # Debug: Check what we got
-                    self.console.print(f"[dim]Debug - Reasoning: {bool(reasoning)}, Content: {bool(content)}, Model: {model}[/dim]")
                     
                     # Prepare display panels
                     panels = []
@@ -419,7 +414,7 @@ class GPTCLI:
                         tools_panel = self.panel_factory.create_tools_panel(len(executed_tools))
                         panels.append(tools_panel)
                     
-                    # Update display with all panels at once
+                    # Update display with all panels at once - this replaces any previous status
                     if panels:
                         live.update(Group(*panels))
                         self.conversation.add_message("assistant", content)

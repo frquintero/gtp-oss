@@ -128,13 +128,6 @@ class GroqClient:
                 # Try to get reasoning field - add debug info
                 message = response.choices[0].message
                 reasoning = getattr(message, 'reasoning', None)
-                
-                # Debug: Print available attributes
-                print(f"Debug - Message attributes: {[attr for attr in dir(message) if not attr.startswith('_')]}")
-                print(f"Debug - Reasoning content: {reasoning}")
-                if hasattr(message, 'reasoning'):
-                    print(f"Debug - Reasoning type: {type(reasoning)}")
-                    print(f"Debug - Reasoning length: {len(str(reasoning)) if reasoning else 0}")
             
             return {
                 "content": response.choices[0].message.content,

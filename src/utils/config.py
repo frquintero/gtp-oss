@@ -18,6 +18,7 @@ class Config:
             'reasoning_effort': os.getenv('GPT_REASONING_EFFORT', 'medium'),
             'include_reasoning': os.getenv('GPT_INCLUDE_REASONING', 'true').lower() == 'true',
             'show_reasoning_panel': os.getenv('GPT_SHOW_REASONING_PANEL', 'false').lower() == 'true',
+            'clear_on_start': os.getenv('GPT_CLEAR_ON_START', 'true').lower() == 'true',
         }
         
         # Valid reasoning effort levels
@@ -45,7 +46,13 @@ class Config:
             import json
             with open(filepath, 'r') as f:
                 file_config = json.load(f)
+                # Merge top-level settings
                 self.settings.update(file_config)
+                # If nested UI settings exist, promote recognized keys
+                ui_cfg = file_config.get('ui') if isinstance(file_config, dict) else None
+                if isinstance(ui_cfg, dict):
+                    if 'clear_on_start' in ui_cfg:
+                        self.settings['clear_on_start'] = bool(ui_cfg['clear_on_start'])
         except FileNotFoundError:
             pass  # Use defaults if config file doesn't exist
     

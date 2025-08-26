@@ -44,6 +44,12 @@ export GROQ_API_KEY="your-api-key-here"
 
 # Combine options for maximum insight
 ./gpt --max --rpanel  # Maximum reasoning with visible thinking process
+
+# Screen clearing on startup
+# The app clears the terminal when starting interactive mode.
+# Disable with flag or env var if you prefer:
+./gpt --no-clear      # Do not clear the terminal on start
+GPT_CLEAR_ON_START=0 ./gpt   # Env var override (0/false disables)
 ```
 
 ## 🎯 Command Palette Usage
@@ -147,6 +153,7 @@ export GPT_DEFAULT_MODEL="openai/gpt-oss-20b"  # Optional
   "groq_api_key": "your-api-key-here",
   "max_tokens": 8192,
   "temperature": 1.0,
+  "clear_on_start": true,
   "save_history": true,
   "history_file": "conversation_history.json",
   "retry_attempts": 3,

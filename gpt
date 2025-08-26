@@ -27,8 +27,30 @@ for arg in "$@"; do
     fi
 done
 
-# Use the enhanced version
-if [ "$QUICK_MODE" = false ]; then
-    echo "Starting GPT CLI Enhanced v2.2.2..."
+#!/bin/bash
+# Determine if user requested no-clear via flag or env
+NO_CLEAR=false
+for arg in "$@"; do
+    if [ "$arg" = "--no-clear" ]; then
+        NO_CLEAR=true
+        break
+    fi
+done
+
+# Env-based override: GPT_CLEAR_ON_START=0/false disables clearing
+if [ -n "${GPT_CLEAR_ON_START}" ]; then
+    case "${GPT_CLEAR_ON_START}" in
+        0|false|False|FALSE)
+            NO_CLEAR=true
+            ;;
+    esac
 fi
+
+# Clear the screen before starting (interactive only, not quick mode)
+if [ -t 1 ] && [ "$QUICK_MODE" = false ] && [ "$NO_CLEAR" = false ]; then
+    clear
+    export GPT_ALREADY_CLEARED=1
+fi
+
+# Use the enhanced version (no extra launcher banner)
 $PYTHON gpt.py "$@"

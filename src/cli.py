@@ -28,7 +28,8 @@ from ui.panels import PanelFactory, TableFactory
 class GPTCLI:
     """Enhanced GPT CLI with modular architecture."""
     
-    def __init__(self, config_path: str = "config.json", reasoning_effort: str = None, show_reasoning_panel: bool = None, quiet_mode: bool = False):
+    from typing import Optional
+    def __init__(self, config_path: str = "config.json", reasoning_effort: str = None, show_reasoning_panel: bool = None, clear_on_start: 'Optional[bool]' = None, quiet_mode: bool = False):
         # Initialize console first
         self.console = Console()
         self.quiet_mode = quiet_mode
@@ -55,6 +56,13 @@ class GPTCLI:
             self.config.set('show_reasoning_panel', show_reasoning_panel)
             if show_reasoning_panel and not self.quiet_mode:
                 self.console.print("Reasoning panel: [green]Enabled[/green] (AI thinking process will be visible)")
+        
+        # Override clear_on_start if provided via command line / entry wrapper
+        if clear_on_start is not None:
+            try:
+                self.config.set('clear_on_start', bool(clear_on_start))
+            except Exception:
+                self.config.settings['clear_on_start'] = bool(clear_on_start)
         
         # Initialize components
         self.conversation = Conversation()
@@ -247,9 +255,10 @@ class GPTCLI:
                     # Ctrl+C -> two-step quit mechanism
                     if ch == "\x03":
                         if ctrl_c_pressed_once:
-                            # Second Ctrl+C -> quit silently with cleanup
+                            # Second Ctrl+C -> prepare clean exit
                             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                            sys.stdout.write("\n\033[2K\r")
+                            # Clear the help line below, then move back up to the prompt line start
+                            sys.stdout.write("\n\033[2K\033[1A\r")
                             sys.stdout.flush()
                             raise KeyboardInterrupt
                         else:
@@ -385,12 +394,12 @@ class GPTCLI:
                     pass
 
         except KeyboardInterrupt:
-            # User requested quit via Ctrl+C - clean up and exit silently
+            # User requested quit via Ctrl+C - clear help and prompt lines
             import sys
-            # Clear any remaining content and position cursor properly
-            sys.stdout.write("\n\033[2K\r")  # New line, clear line, return to start
+            # Clear help line (below), then move back and clear prompt line
+            sys.stdout.write("\n\033[2K\033[1A\r\033[2K")
             sys.stdout.flush()
-            # Re-raise so outer run loop can exit
+            # Re-raise so outer run loop can print final message
             raise
         except Exception:
             # Fall back to the simple input() if raw mode fails
@@ -646,6 +655,13 @@ class GPTCLI:
     
     def run(self):
         """Main application loop."""
+        # Clear screen on start if enabled and interactive TTY
+        try:
+            import sys as _sys
+            if self.config.get('clear_on_start', True) and _sys.stdout.isatty():
+                self.console.clear()
+        except Exception:
+            pass
         self.display_welcome()
         
         while True:
@@ -669,9 +685,9 @@ class GPTCLI:
                 self.stream_response()
                 
             except KeyboardInterrupt:
-                # Clean exit - clear any remaining output
+                # Clean exit - replace prompt with termination message
                 import sys
-                sys.stdout.write("\033[2K\r")  # Clear line and return to start
+                sys.stdout.write("\r\033[2KProgram Terminated by the user\n")
                 sys.stdout.flush()
                 break
             except Exception as e:

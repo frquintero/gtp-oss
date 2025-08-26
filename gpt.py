@@ -61,6 +61,13 @@ For more information, visit: https://github.com/frquintero/gtp-oss
         help='Show reasoning panel in the UI (displays AI thinking process)'
     )
     
+    # Disable clearing the terminal at startup
+    parser.add_argument(
+        '--no-clear',
+        action='store_true',
+        help='Do not clear the terminal screen on startup'
+    )
+    
     # Help flag
     parser.add_argument(
         '-h', '--help',
@@ -97,9 +104,23 @@ def main():
         
         # Importar y ejecutar la CLI
         from cli import GPTCLI
+        # Determine if we should clear screen on start
+        from typing import Optional
+        clear_on_start: Optional[bool]
+        if quick_mode:
+            clear_on_start = False
+        elif os.getenv('GPT_ALREADY_CLEARED'):
+            clear_on_start = False
+        elif args.no_clear:
+            clear_on_start = False
+        else:
+            # Defer to config default
+            clear_on_start = None
+
         cli = GPTCLI(
             reasoning_effort=args.reasoning_effort, 
             show_reasoning_panel=args.rpanel,
+            clear_on_start=clear_on_start,
             quiet_mode=quick_mode  # Suppress startup messages in quick mode
         )
         
@@ -116,7 +137,7 @@ def main():
             # Run interactive mode
             cli.run()
     except KeyboardInterrupt:
-        print("\nGoodbye!")
+        print("\nProgram Terminated by the user")
     except Exception as e:
         print(f"Error: {e}")
         print("Please ensure all dependencies are installed: pip install -r requirements.txt")

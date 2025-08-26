@@ -1,259 +1,184 @@
 """UI formatters for text processing."""
 import re
-from typing import List, Dict, Any
-from rich.text import Text
-from rich.markdown import Markdown
-
-
-class TextFormatter:
-    """Utilities for formatting text content."""
-    
-    @staticmethod
-    def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
-        """Truncate text to specified length."""
-        if len(text) <= max_length:
-            return text
-        return text[:max_length - len(suffix)] + suffix
-    
-    @staticmethod
-    def extract_code_blocks(text: str) -> List[Dict[str, str]]:
-        """Extract code blocks from markdown text."""
-        pattern = r'```(\w+)?\n(.*?)\n```'
-        matches = re.findall(pattern, text, re.DOTALL)
-        
-        code_blocks = []
-        for language, code in matches:
-            code_blocks.append({
-                'language': language or 'text',
-                'code': code.strip()
-            })
-        
-        return code_blocks
-    
-    @staticmethod
-    def format_code_preview(code: str, max_lines: int = 5) -> str:
-        """Format code for preview display."""
-        lines = code.split('\n')
-        if len(lines) <= max_lines:
-            return code
-        
-        preview_lines = lines[:max_lines]
-        remaining = len(lines) - max_lines
-        preview_lines.append(f"... ({remaining} more lines)")
-        
-        return '\n'.join(preview_lines)
-    
-    @staticmethod
-    def highlight_keywords(text: str, keywords: List[str], style: str = "bold yellow") -> Text:
-        """Highlight specific keywords in text."""
-        rich_text = Text(text)
-        
-        for keyword in keywords:
-            # Find all occurrences of the keyword (case insensitive)
-            start = 0
-            while True:
-                pos = text.lower().find(keyword.lower(), start)
-                if pos == -1:
-                    break
-                
-                rich_text.stylize(style, pos, pos + len(keyword))
-                start = pos + len(keyword)
-        
-        return rich_text
-    
-    @staticmethod
-    def clean_whitespace(text: str) -> str:
-        """Clean excessive whitespace from text."""
-        # Remove excessive newlines (more than 2)
-        text = re.sub(r'\n{3,}', '\n\n', text)
-        
-        # Remove trailing whitespace from lines
-        lines = text.split('\n')
-        lines = [line.rstrip() for line in lines]
-        
-        return '\n'.join(lines)
-    
-    @staticmethod
-    def format_file_size(size_bytes: int) -> str:
-        """Format file size in human readable format."""
-        if size_bytes < 1024:
-            return f"{size_bytes}B"
-        elif size_bytes < 1024 * 1024:
-            return f"{size_bytes // 1024}KB"
-        elif size_bytes < 1024 * 1024 * 1024:
-            return f"{size_bytes // (1024 * 1024)}MB"
-        else:
-            return f"{size_bytes // (1024 * 1024 * 1024)}GB"
-    
-    @staticmethod
-    def format_duration(seconds: float) -> str:
-        """Format duration in human readable format."""
-        if seconds < 60:
-            return f"{seconds:.1f}s"
-        elif seconds < 3600:
-            minutes = int(seconds // 60)
-            remaining_seconds = int(seconds % 60)
-            return f"{minutes}m {remaining_seconds}s"
-        else:
-            hours = int(seconds // 3600)
-            remaining_minutes = int((seconds % 3600) // 60)
-            return f"{hours}h {remaining_minutes}m"
-
-
-class MarkdownProcessor:
-    """Enhanced markdown processing utilities."""
-    
-    @staticmethod
-    def extract_tables(text: str) -> List[str]:
-        """Extract markdown tables from text."""
-        # Simple table detection pattern
-        table_pattern = r'(\|.*\|[\r\n]+\|[-\s\|]+\|[\r\n]+(?:\|.*\|[\r\n]*)*)'
-        tables = re.findall(table_pattern, text, re.MULTILINE)
-        return tables
-    
-    @staticmethod
-    def extract_headers(text: str) -> List[Dict[str, Any]]:
-        """Extract headers from markdown text."""
-        headers = []
-        lines = text.split('\n')
-        
-        for i, line in enumerate(lines):
-            if line.startswith('#'):
-                level = len(line) - len(line.lstrip('#'))
-                title = line.lstrip('# ').strip()
-                headers.append({
-                    'level': level,
-                    'title': title,
-                    'line': i + 1
-                })
-        
-        return headers
-    
-    @staticmethod
-    def extract_links(text: str) -> List[Dict[str, str]]:
-        """Extract links from markdown text."""
-        # Pattern for [text](url) links
-        link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
-        matches = re.findall(link_pattern, text)
-        
-        links = []
-        for text_part, url in matches:
-            links.append({
-                'text': text_part,
-                'url': url
-            })
-        
-        return links
-    
-    @staticmethod
-    def create_toc(headers: List[Dict[str, Any]]) -> str:
-        """Create table of contents from headers."""
-        if not headers:
-            return ""
-        
-        toc_lines = ["# Table of Contents", ""]
-        
-        for header in headers:
-            indent = "  " * (header['level'] - 1)
-            title = header['title']
-            # Create anchor link (simplified)
-            anchor = title.lower().replace(' ', '-').replace('.', '').replace(',', '')
-            toc_lines.append(f"{indent}- [{title}](#{anchor})")
-        
-        return '\n'.join(toc_lines)
+from typing import Optional
 
 
 class MathFormatter:
-    r"""Selective math transformer: only process math inside $...$ or \[...\].
+    r"""Enhanced math transformer with pre-filtering and robust LaTeX support.
 
-    This makes a conservative, readable conversion of common LaTeX
-    constructs into Unicode or simple ASCII approximations so math
-    displays nicely in terminal Markdown without breaking non-math text.
+    Efficiently processes LaTeX math expressions for terminal display by:
+    1. Pre-checking for math content to skip unnecessary processing
+    2. Converting common LaTeX constructs to Unicode/ASCII equivalents
+    3. Providing graceful fallbacks for unsupported expressions
     """
 
+    # Extended Greek letters support
     GREEK = {
-        r"\\alpha": "α",
-        r"\\beta": "β",
-        r"\\gamma": "γ",
-        r"\\delta": "δ",
-        r"\\theta": "θ",
-        r"\\lambda": "λ",
-        r"\\pi": "π",
-        r"\\sigma": "σ",
-        r"\\phi": "φ",
-        r"\\omega": "ω",
+        r"\\alpha": "α", r"\\Alpha": "Α",
+        r"\\beta": "β", r"\\Beta": "Β", 
+        r"\\gamma": "γ", r"\\Gamma": "Γ",
+        r"\\delta": "δ", r"\\Delta": "Δ",
+        r"\\epsilon": "ε", r"\\varepsilon": "ε",
+        r"\\zeta": "ζ", r"\\Zeta": "Ζ",
+        r"\\eta": "η", r"\\Eta": "Η",
+        r"\\theta": "θ", r"\\Theta": "Θ", r"\\vartheta": "ϑ",
+        r"\\iota": "ι", r"\\Iota": "Ι",
+        r"\\kappa": "κ", r"\\Kappa": "Κ",
+        r"\\lambda": "λ", r"\\Lambda": "Λ",
+        r"\\mu": "μ", r"\\Mu": "Μ",
+        r"\\nu": "ν", r"\\Nu": "Ν",
+        r"\\xi": "ξ", r"\\Xi": "Ξ",
+        r"\\omicron": "ο", r"\\Omicron": "Ο",
+        r"\\pi": "π", r"\\Pi": "Π", r"\\varpi": "ϖ",
+        r"\\rho": "ρ", r"\\Rho": "Ρ", r"\\varrho": "ϱ",
+        r"\\sigma": "σ", r"\\Sigma": "Σ", r"\\varsigma": "ς",
+        r"\\tau": "τ", r"\\Tau": "Τ",
+        r"\\upsilon": "υ", r"\\Upsilon": "Υ",
+        r"\\phi": "φ", r"\\Phi": "Φ", r"\\varphi": "ϕ",
+        r"\\chi": "χ", r"\\Chi": "Χ",
+        r"\\psi": "ψ", r"\\Psi": "Ψ",
+        r"\\omega": "ω", r"\\Omega": "Ω",
+    }
+
+    # Extended mathematical symbols
+    SYMBOLS = {
+        r"\\times": "×", r"\\cdot": "·", r"\\bullet": "•",
+        r"\\leq": "≤", r"\\le": "≤", r"\\geq": "≥", r"\\ge": "≥",
+        r"\\neq": "≠", r"\\ne": "≠", r"\\equiv": "≡",
+        r"\\pm": "±", r"\\mp": "∓",
+        r"\\approx": "≈", r"\\sim": "∼", r"\\simeq": "≃",
+        r"\\propto": "∝", r"\\infty": "∞",
+        r"\\in": "∈", r"\\notin": "∉", r"\\ni": "∋",
+        r"\\subset": "⊂", r"\\supset": "⊃", r"\\subseteq": "⊆", r"\\supseteq": "⊇",
+        r"\\cup": "∪", r"\\cap": "∩", r"\\setminus": "∖",
+        r"\\emptyset": "∅", r"\\varnothing": "∅",
+        r"\\forall": "∀", r"\\exists": "∃", r"\\nexists": "∄",
+        r"\\therefore": "∴", r"\\because": "∵",
+        r"\\sum": "Σ", r"\\prod": "Π", r"\\int": "∫",
+        r"\\partial": "∂", r"\\nabla": "∇",
+        r"\\rightarrow": "→", r"\\to": "→", r"\\leftarrow": "←",
+        r"\\leftrightarrow": "↔", r"\\Rightarrow": "⇒", r"\\Leftarrow": "⇐",
+        r"\\Leftrightarrow": "⇔", r"\\iff": "⇔",
+        r"\\uparrow": "↑", r"\\downarrow": "↓", r"\\updownarrow": "↕",
     }
 
     @staticmethod
-    def _transform_expr(expr: str) -> str:
-        # Handle simple fractions \frac{a}{b} -> (a)/(b)
-        def frac_repl(m):
-            num = m.group(1)
-            den = m.group(2)
-            return f"({num})/({den})"
+    def has_math_content(text: str) -> bool:
+        """Pre-filter: quickly check if text contains math expressions."""
+        if not text:
+            return False
+        return '$' in text or '\\[' in text or '\\(' in text
 
-        # Unroll simple \frac occurrences
-        expr = re.sub(r'\\frac\{([^{}]+)\}\{([^{}]+)\}', frac_repl, expr)
+    @staticmethod
+    def _safe_transform_expr(expr: str) -> str:
+        """Transform LaTeX expression with error handling and enhanced support."""
+        if not expr or not expr.strip():
+            return expr
 
-        # sqrt -> √(...)
-        expr = re.sub(r'\\sqrt\{([^{}]+)\}', lambda m: f"√({m.group(1)})", expr)
+        try:
+            original_expr = expr
+            
+            # Handle nested fractions with improved regex
+            def frac_repl(match):
+                try:
+                    num = match.group(1).strip()
+                    den = match.group(2).strip()
+                    return f"({num})/({den})"
+                except Exception:
+                    return match.group(0)  # Return original if parsing fails
 
-        # simple command replacements (greek and common symbols)
-        replacements = {
-            r"\\times": "×",
-            r"\\cdot": "·",
-            r"\\leq": "≤",
-            r"\\geq": "≥",
-            r"\\neq": "≠",
-            r"\\pm": "±",
-        }
+            # Process fractions (handles simple nesting)
+            expr = re.sub(r'\\frac\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}', 
+                         frac_repl, expr)
 
-        # apply greek
-        for k, v in MathFormatter.GREEK.items():
-            expr = re.sub(k, v, expr)
+            # Handle square roots with improved pattern
+            def sqrt_repl(match):
+                try:
+                    content = match.group(1).strip()
+                    return f"√({content})"
+                except Exception:
+                    return match.group(0)
 
-        for k, v in replacements.items():
-            expr = re.sub(k, v, expr)
+            expr = re.sub(r'\\sqrt\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}', sqrt_repl, expr)
 
-        # remove remaining stray braces
-        expr = expr.replace('{', '').replace('}', '')
+            # Handle superscripts and subscripts
+            expr = re.sub(r'\^(\w|\{[^}]*\})', lambda m: f"^{m.group(1).strip('{}')}", expr)
+            expr = re.sub(r'_(\w|\{[^}]*\})', lambda m: f"_{m.group(1).strip('{}')}", expr)
 
-        # collapse multiple spaces
-        expr = re.sub(r'\s+', ' ', expr).strip()
-        return expr
+            # Apply Greek letters (case-sensitive, whole word)
+            for latex_cmd, unicode_char in MathFormatter.GREEK.items():
+                expr = re.sub(latex_cmd + r'(?![a-zA-Z])', unicode_char, expr)
+
+            # Apply mathematical symbols (case-sensitive, whole word)
+            for latex_cmd, unicode_char in MathFormatter.SYMBOLS.items():
+                expr = re.sub(latex_cmd + r'(?![a-zA-Z])', unicode_char, expr)
+
+            # Clean up remaining LaTeX commands (remove unknown commands gracefully)
+            expr = re.sub(r'\\[a-zA-Z]+\*?', '', expr)
+
+            # Clean up braces and excessive whitespace
+            expr = re.sub(r'\{([^{}]*)\}', r'\1', expr)  # Remove simple braces
+            expr = re.sub(r'\s+', ' ', expr)  # Collapse whitespace
+            expr = expr.strip()
+
+            return expr if expr else original_expr
+
+        except Exception:
+            # If any error occurs, return the original expression
+            return original_expr
 
     @staticmethod
     def transform_math_regions(text: str) -> str:
-        r"""Find inline ($...$) and display (\[...\]) math regions and
-        transform their contents, leaving other text untouched.
+        r"""Find and transform math regions with enhanced performance and error handling.
 
-        The delimiters are removed and replaced with the transformed content
-        so Markdown rendering doesn't attempt to interpret LaTeX.
+        Processes inline ($...$), display (\[...\]), and parenthesized (\(...\)) math.
+        Includes pre-filtering for performance optimization.
         """
-        if not text:
+        if not text or not MathFormatter.has_math_content(text):
             return text
 
-        # handle display math \[ ... \]
-        def display_repl(m):
-            inner = m.group(1)
-            return MathFormatter._transform_expr(inner)
+        try:
+            # Handle display math \[ ... \] (highest priority)
+            def display_repl(match):
+                try:
+                    inner = match.group(1)
+                    return MathFormatter._safe_transform_expr(inner)
+                except Exception:
+                    return match.group(0)  # Return original on error
 
-        text = re.sub(r"\\\[(.+?)\\\]", display_repl, text, flags=re.DOTALL)
+            text = re.sub(r'\\\[(.+?)\\\]', display_repl, text, flags=re.DOTALL)
 
-        # handle inline math $...$
-        def inline_repl(m):
-            inner = m.group(1)
-            return MathFormatter._transform_expr(inner)
+            # Handle parenthesized math \( ... \)
+            def paren_repl(match):
+                try:
+                    inner = match.group(1)
+                    return MathFormatter._safe_transform_expr(inner)
+                except Exception:
+                    return match.group(0)
 
-        text = re.sub(r"\$(.+?)\$", inline_repl, text, flags=re.DOTALL)
+            text = re.sub(r'\\\((.+?)\\\)', paren_repl, text, flags=re.DOTALL)
 
-        return text
+            # Handle inline math $...$ (most common, process last to avoid conflicts)
+            def inline_repl(match):
+                try:
+                    inner = match.group(1)
+                    return MathFormatter._safe_transform_expr(inner)
+                except Exception:
+                    return match.group(0)
+
+            text = re.sub(r'\$(.+?)\$', inline_repl, text, flags=re.DOTALL)
+
+            return text
+
+        except Exception:
+            # If any catastrophic error occurs, return original text
+            return text
 
     @staticmethod
     def clean_latex_math(text: str) -> str:
-        """Compatibility wrapper used by existing tests and callers.
+        """Compatibility wrapper for existing callers.
 
-        Delegates to transform_math_regions which implements the conservative
-        math-region-only transformation.
+        Delegates to transform_math_regions which implements the enhanced
+        math transformation with pre-filtering and error handling.
         """
         return MathFormatter.transform_math_regions(text)

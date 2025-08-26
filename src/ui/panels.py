@@ -48,22 +48,6 @@ class PanelFactory:
             padding=(1, 2)
         )
     
-    def create_usage_panel(self, tokens: int, model: str = "") -> Panel:
-        """Create panel for token usage information."""
-        if tokens <= 0:
-            return None
-        
-        text = f"Tokens used: {tokens:,}"
-        if model:
-            text += f"\nModel: {model}"
-        
-        return Panel(
-            Text(text, style="blue"),
-            title="[bold]📊 Usage[/bold]",
-            border_style="blue",
-            padding=(1, 2)
-        )
-    
     def create_error_panel(self, error: str) -> Panel:
         """Create panel for error messages."""
         return Panel(

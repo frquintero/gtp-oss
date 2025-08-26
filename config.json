@@ -7,13 +7,11 @@
   "history_file": "conversation_history.json",
   "retry_attempts": 3,
   "timeout": 30,
-  "conversations_dir": "conversations",
   "reasoning_effort": "medium",
   "include_reasoning": true,
-  "show_reasoning_panel": true,
+  "show_reasoning_panel": false,
   "ui": {
     "max_panel_height": 15,
-    "color_scheme": "default",
-    "show_token_usage": true
+    "color_scheme": "default"
   }
 }

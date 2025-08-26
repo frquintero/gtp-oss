@@ -22,7 +22,7 @@ from utils.config import Config
 from utils.validators import InputValidator, CommandValidator
 from utils.commands import CommandHandler
 from ui.panels import PanelFactory, TableFactory
-from ui.formatters import TextFormatter
+# TextFormatter removed - was unused
 
 
 class GPTCLI:

@@ -133,7 +133,6 @@ class GroqClient:
                 "content": response.choices[0].message.content,
                 "reasoning": reasoning,
                 "model": response.model,
-                "usage": response.usage.dict() if hasattr(response, 'usage') else {},
                 "executed_tools": getattr(response.choices[0].message, 'executed_tools', None)
             }
             
@@ -142,7 +141,6 @@ class GroqClient:
                 "content": f"Error: {str(e)}",
                 "reasoning": None,
                 "model": model,
-                "usage": {},
                 "executed_tools": None
             }
     

@@ -10,11 +10,6 @@ click>=8.0.0
 python-dotenv>=1.0.0
 prompt_toolkit>=3.0.0
 
-# Export capabilities  
-fpdf2>=2.7.0
-python-docx>=0.8.11
-markdown>=3.4.0
-
 # Optional: For future RAG features
 # faiss-cpu>=1.7.0
 # sentence-transformers

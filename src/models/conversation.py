@@ -62,48 +62,6 @@ class Conversation:
         
         return matches
     
-    def export_to_dict(self) -> Dict[str, Any]:
-        """Export conversation to dictionary."""
-        return {
-            "session_id": self.session_id,
-            "created_at": self.created_at.isoformat(),
-            "model": self.model,
-            "metadata": self.metadata,
-            "messages": [msg.to_dict() for msg in self.messages],
-            "stats": {
-                "total_messages": self.get_message_count(),
-                "user_messages": self.get_user_message_count(),
-                "assistant_messages": self.get_assistant_message_count(),
-                "total_characters": self.get_total_characters()
-            }
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Conversation':
-        """Create conversation from dictionary."""
-        conv = cls(session_id=data.get("session_id"))
-        conv.created_at = datetime.fromisoformat(data.get("created_at", datetime.now().isoformat()))
-        conv.model = data.get("model", "openai/gpt-oss-20b")
-        conv.metadata = data.get("metadata", {})
-        
-        # Load messages
-        for msg_data in data.get("messages", []):
-            conv.messages.append(Message.from_dict(msg_data))
-        
-        return conv
-    
-    def save_to_file(self, filepath: str):
-        """Save conversation to JSON file."""
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(self.export_to_dict(), f, indent=2, ensure_ascii=False)
-    
-    @classmethod
-    def load_from_file(cls, filepath: str) -> 'Conversation':
-        """Load conversation from JSON file."""
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return cls.from_dict(data)
-    
     def __str__(self) -> str:
         return f"Conversation({self.session_id}, {len(self.messages)} messages)"
     

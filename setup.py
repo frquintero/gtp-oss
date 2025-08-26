@@ -9,7 +9,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="gpt-cli-enhanced",
-    version="2.2.1",
+    version="2.2.2",
     author="frquintero",
     author_email="",
     description="A command-line interface for interacting with GPT models via Groq",

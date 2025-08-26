@@ -128,10 +128,6 @@ class TableFactory:
             ("model <name>", "Switch model"),
             ("template", "List available templates"),
             ("template <name>", "Use specific template"),
-            ("save <file>", "Save conversation to JSON"),
-            ("load <file>", "Load conversation from JSON"),
-            ("load doc <file>", "Load document into prompt"),
-            ("export <format> <file>", "Export conversation"),
             ("list", "List saved conversations"),
             ("exit/quit", "Exit the application (or use Ctrl+C to quit)"),
             ("", "Enter message line by line, press Enter on empty line to submit"),
@@ -155,46 +151,6 @@ class TableFactory:
             role = msg["role"].capitalize()
             content = msg["content"][:200] + "..." if len(msg["content"]) > 200 else msg["content"]
             table.add_row(role, content)
-        
-        return table
-    
-    @staticmethod
-    def create_conversations_table(conversations: List[Dict[str, Any]]) -> Table:
-        """Create saved conversations table."""
-        table = Table(title="[bold]💾 Saved Conversations[/bold]")
-        table.add_column("Filename", style="cyan")
-        table.add_column("Session ID", style="yellow")
-        table.add_column("Created", style="green")
-        table.add_column("Model", style="magenta")
-        table.add_column("Messages", style="blue", justify="right")
-        table.add_column("Size", style="white", justify="right")
-        
-        for conv in conversations:
-            # Format created date
-            created = conv.get('created_at', '')
-            if created:
-                try:
-                    from datetime import datetime
-                    dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
-                    created = dt.strftime('%Y-%m-%d %H:%M')
-                except:
-                    pass
-            
-            # Format file size
-            size = conv.get('size', 0)
-            if size > 1024:
-                size_str = f"{size // 1024}KB"
-            else:
-                size_str = f"{size}B"
-            
-            table.add_row(
-                conv.get('filename', ''),
-                conv.get('session_id', '')[:20] + "..." if len(conv.get('session_id', '')) > 20 else conv.get('session_id', ''),
-                created,
-                conv.get('model', ''),
-                str(conv.get('message_count', 0)),
-                size_str
-            )
         
         return table
     

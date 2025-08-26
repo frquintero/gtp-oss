@@ -8,15 +8,9 @@
   "retry_attempts": 3,
   "timeout": 30,
   "conversations_dir": "conversations",
-  "documents_dir": "documents",
   "ui": {
     "max_panel_height": 15,
     "color_scheme": "default",
     "show_token_usage": true
-  },
-  "export": {
-    "default_format": "json",
-    "include_metadata": true,
-    "auto_timestamp": true
   }
 }

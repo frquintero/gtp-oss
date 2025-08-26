@@ -19,28 +19,5 @@ class Message:
         if self.metadata is None:
             self.metadata = {}
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert message to dictionary format."""
-        return {
-            "role": self.role,
-            "content": self.content,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
-            "metadata": self.metadata
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Message':
-        """Create message from dictionary."""
-        timestamp = None
-        if data.get("timestamp"):
-            timestamp = datetime.fromisoformat(data["timestamp"])
-        
-        return cls(
-            role=data["role"],
-            content=data["content"],
-            timestamp=timestamp,
-            metadata=data.get("metadata", {})
-        )
-    
     def __str__(self) -> str:
         return f"{self.role.upper()}: {self.content[:100]}{'...' if len(self.content) > 100 else ''}"

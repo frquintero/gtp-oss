@@ -127,7 +127,7 @@ class CommandValidator:
             'help', 'new', 'clear', 'history', 'model',
             'config', 'settings',
             # file-related commands
-            'save', 'load', 'list', 'export', 'template'
+            'list', 'template'
         }
         
         # Solo es un comando si la primera palabra está en la lista de comandos válidos
@@ -155,18 +155,6 @@ class CommandValidator:
             return f"Invalid model: {model}. Valid models: {', '.join(valid_models)}"
         
         return None  # Valid
-
-    @staticmethod
-    def validate_save_command(args: List[str]) -> Optional[str]:
-        """Validate save command arguments: expect exactly one filename."""
-        if len(args) != 1:
-            return "Usage: save <filename>"
-
-        filename = args[0]
-        if not InputValidator.validate_filename(filename):
-            return f"Invalid filename: {filename}"
-
-        return None
 
 
 class ConfigValidator:

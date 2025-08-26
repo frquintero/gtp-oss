@@ -11,6 +11,7 @@ from pathlib import Path
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
+        prog='gpt',  # Set the program name to 'gpt' instead of 'gpt.py'
         description="GPT CLI Enhanced - Interactive AI assistant with reasoning effort control",
         epilog="""
 Examples:

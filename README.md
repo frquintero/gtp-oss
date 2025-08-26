@@ -33,6 +33,17 @@ export GROQ_API_KEY="your-api-key-here"
 
 # Run the CLI
 ./gpt
+
+# Or with reasoning effort control
+./gpt --low     # Fast responses with low reasoning effort
+./gpt --medium  # Balanced responses (default)
+./gpt --max     # Maximum reasoning effort for complex problems
+
+# Or with reasoning panel visible
+./gpt --rpanel  # Show AI thinking process in UI
+
+# Combine options for maximum insight
+./gpt --max --rpanel  # Maximum reasoning with visible thinking process
 ```
 
 ## 🎯 Command Palette Usage
@@ -60,6 +71,41 @@ The command palette is the fastest way to access all functionality:
 - `status` - Show current model and conversation status
 - `about` - Show application information
 - `exit` - Exit the application
+
+## 🧠 Reasoning Effort Control
+
+Control the AI's reasoning effort level for different use cases:
+
+### Command Line Options
+```bash
+./gpt --low     # Low reasoning effort - faster responses for simple tasks
+./gpt --medium  # Medium reasoning effort - balanced performance (default)
+./gpt --max     # Maximum reasoning effort - deep thinking for complex problems
+./gpt --rpanel  # Show reasoning panel - displays AI thinking process in UI
+```
+
+### Advanced Usage
+```bash
+# Combine reasoning effort with visible thinking process
+./gpt --max --rpanel    # Maximum reasoning with visible AI thinking
+./gpt --low --rpanel    # Fast responses with visible thinking process
+```
+
+### When to Use Each Level
+
+- **--low**: Quick questions, simple coding tasks, casual conversations
+- **--medium**: General use, most coding projects, balanced quality/speed (default)
+- **--max**: Complex problem solving, research tasks, advanced analysis
+
+### Configuration
+You can also set the default reasoning effort and panel visibility in `config.json`:
+```json
+{
+  "reasoning_effort": "medium",
+  "include_reasoning": true,
+  "show_reasoning_panel": false
+}
+```
 
 ## 🎮 Basic Usage
 

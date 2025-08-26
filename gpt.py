@@ -5,10 +5,82 @@ GPT CLI Enhanced - Simple entry point
 
 import sys
 import os
+import argparse
 from pathlib import Path
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="GPT CLI Enhanced - Interactive AI assistant with reasoning effort control",
+        epilog="""
+Examples:
+  ./gpt                  # Start interactive mode with default settings
+  ./gpt --low           # Use low reasoning effort (faster)
+  ./gpt --medium        # Use medium reasoning effort (default)
+  ./gpt --max           # Use maximum reasoning effort (deeper thinking)
+  ./gpt --rpanel        # Show reasoning panel in UI (displays AI thinking)
+  ./gpt --max --rpanel  # Maximum reasoning with visible thinking process
+  ./gpt "Hello world"   # Send message directly from command line
+  ./gpt --help          # Show this help message
+
+For more information, visit: https://github.com/frquintero/gtp-oss
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False  # We'll handle help manually to avoid conflicts
+    )
+    
+    # Reasoning effort flags (mutually exclusive)
+    reasoning_group = parser.add_mutually_exclusive_group()
+    reasoning_group.add_argument(
+        '--low', 
+        action='store_const', 
+        const='low', 
+        dest='reasoning_effort',
+        help='Use low reasoning effort for faster responses'
+    )
+    reasoning_group.add_argument(
+        '--medium', 
+        action='store_const', 
+        const='medium', 
+        dest='reasoning_effort',
+        help='Use medium reasoning effort (default)'
+    )
+    reasoning_group.add_argument(
+        '--max', 
+        action='store_const', 
+        const='high', 
+        dest='reasoning_effort',
+        help='Use maximum reasoning effort for complex problems'
+    )
+    
+    # Reasoning panel flag
+    parser.add_argument(
+        '--rpanel',
+        action='store_true',
+        help='Show reasoning panel in the UI (displays AI thinking process)'
+    )
+    
+    # Help flag
+    parser.add_argument(
+        '-h', '--help',
+        action='store_true',
+        help='Show this help message and exit'
+    )
+    
+    # Parse known args to handle any additional arguments as user input
+    args, remaining = parser.parse_known_args()
+    
+    if args.help:
+        parser.print_help()
+        sys.exit(0)
+    
+    return args, remaining
 
 def main():
     """Main entry point for enhanced CLI."""
+    # Parse command line arguments
+    args, remaining_args = parse_arguments()
+    
     # Configurar el directorio de trabajo
     project_root = Path(__file__).parent.absolute()
     os.chdir(project_root)
@@ -21,12 +93,12 @@ def main():
     try:
         # Importar y ejecutar la CLI
         from cli import GPTCLI
-        cli = GPTCLI()
+        cli = GPTCLI(reasoning_effort=args.reasoning_effort, show_reasoning_panel=args.rpanel)
         
-        # Check if we have command line arguments
-        if len(sys.argv) > 1:
+        # Check if we have remaining command line arguments (user input)
+        if remaining_args:
             # Handle command line arguments
-            command = " ".join(sys.argv[1:])
+            command = " ".join(remaining_args)
             if cli.handle_command(command):
                 return
             else:

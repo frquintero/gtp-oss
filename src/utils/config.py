@@ -15,14 +15,28 @@ class Config:
             'history_file': os.getenv('GPT_HISTORY_FILE', 'conversation_history.json'),
             'retry_attempts': int(os.getenv('GPT_RETRY_ATTEMPTS', '3')),
             'timeout': int(os.getenv('GPT_TIMEOUT', '30')),
+            'reasoning_effort': os.getenv('GPT_REASONING_EFFORT', 'medium'),
+            'include_reasoning': os.getenv('GPT_INCLUDE_REASONING', 'true').lower() == 'true',
+            'show_reasoning_panel': os.getenv('GPT_SHOW_REASONING_PANEL', 'false').lower() == 'true',
         }
+        
+        # Valid reasoning effort levels
+        self.valid_reasoning_efforts = ['low', 'medium', 'high']
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value."""
         return self.settings.get(key, default)
     
     def set(self, key: str, value: Any) -> None:
-        """Set configuration value."""
+        """Set configuration value with validation."""
+        # Validate reasoning effort
+        if key == 'reasoning_effort' and value not in self.valid_reasoning_efforts:
+            raise ValueError(f"Invalid reasoning effort '{value}'. Valid options: {', '.join(self.valid_reasoning_efforts)}")
+        
+        # Validate show_reasoning_panel
+        if key == 'show_reasoning_panel' and not isinstance(value, bool):
+            raise ValueError(f"Invalid show_reasoning_panel value '{value}'. Must be a boolean (True/False).")
+        
         self.settings[key] = value
     
     def load_from_file(self, filepath: str) -> None:

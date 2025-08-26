@@ -28,7 +28,7 @@ from ui.panels import PanelFactory, TableFactory
 class GPTCLI:
     """Enhanced GPT CLI with modular architecture."""
     
-    def __init__(self, config_path: str = "config.json"):
+    def __init__(self, config_path: str = "config.json", reasoning_effort: str = None, show_reasoning_panel: bool = None):
         # Initialize console first
         self.console = Console()
         
@@ -36,6 +36,23 @@ class GPTCLI:
         self.config = Config()
         if os.path.exists(config_path):
             self.config.load_from_file(config_path)
+        
+        # Override reasoning effort if provided via command line
+        if reasoning_effort:
+            self.config.set('reasoning_effort', reasoning_effort)
+            # Show reasoning effort confirmation
+            effort_display = {
+                'low': '[yellow]Low[/yellow] (faster responses)',
+                'medium': '[cyan]Medium[/cyan] (balanced)',
+                'high': '[green]High[/green] (maximum reasoning)'
+            }
+            self.console.print(f"Reasoning effort set to: {effort_display.get(reasoning_effort, reasoning_effort)}")
+        
+        # Override show_reasoning_panel if provided via command line
+        if show_reasoning_panel is not None:
+            self.config.set('show_reasoning_panel', show_reasoning_panel)
+            if show_reasoning_panel:
+                self.console.print("Reasoning panel: [green]Enabled[/green] (AI thinking process will be visible)")
         
         # Initialize components
         self.conversation = Conversation()

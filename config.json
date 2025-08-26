@@ -8,6 +8,9 @@
   "retry_attempts": 3,
   "timeout": 30,
   "conversations_dir": "conversations",
+  "reasoning_effort": "medium",
+  "include_reasoning": true,
+  "show_reasoning_panel": true,
   "ui": {
     "max_panel_height": 15,
     "color_scheme": "default",

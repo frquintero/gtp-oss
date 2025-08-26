@@ -66,9 +66,10 @@ class GroqClient:
             "stop": None
         }
         
-        # Add reasoning effort for non-compound models
+        # Add reasoning parameters for non-compound models
         if not model.startswith("compound-"):
-            params["reasoning_effort"] = "medium"
+            params["reasoning_effort"] = self.config.get('reasoning_effort', 'medium')
+            params["include_reasoning"] = self.config.get('include_reasoning', True)
         
         # Override with any provided kwargs
         params.update(kwargs)
@@ -84,20 +85,32 @@ class GroqClient:
         messages: List[Dict[str, str]], 
         model: str,
         **kwargs
-    ) -> Iterator[str]:
-        """Stream completion tokens."""
+    ) -> Iterator[Dict[str, Any]]:
+        """Stream completion tokens with reasoning support."""
         try:
             stream = self.create_completion(messages, model, stream=True, **kwargs)
+            full_content = ""
+            reasoning = None
             
             for chunk in stream:
                 if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                    content_chunk = chunk.choices[0].delta.content
+                    full_content += content_chunk
+                    yield {"type": "content", "data": content_chunk}
+                
+                # Check for reasoning in the final chunk
+                if chunk.choices[0].finish_reason and not model.startswith("compound-"):
+                    reasoning = getattr(chunk.choices[0].message, 'reasoning', None) if hasattr(chunk.choices[0], 'message') else None
+            
+            # Send reasoning at the end if available
+            if reasoning:
+                yield {"type": "reasoning", "data": reasoning}
                     
         except KeyboardInterrupt:
             # Allow graceful interruption
             return
         except Exception as e:
-            yield f"\n[Error: {str(e)}]"
+            yield {"type": "error", "data": f"Error: {str(e)}"}
     
     def get_non_stream_completion(
         self, 
@@ -109,8 +122,23 @@ class GroqClient:
         try:
             response = self.create_completion(messages, model, stream=False, **kwargs)
             
+            # Extract reasoning field for GPT-OSS models
+            reasoning = None
+            if not model.startswith("compound-"):
+                # Try to get reasoning field - add debug info
+                message = response.choices[0].message
+                reasoning = getattr(message, 'reasoning', None)
+                
+                # Debug: Print available attributes
+                print(f"Debug - Message attributes: {[attr for attr in dir(message) if not attr.startswith('_')]}")
+                print(f"Debug - Reasoning content: {reasoning}")
+                if hasattr(message, 'reasoning'):
+                    print(f"Debug - Reasoning type: {type(reasoning)}")
+                    print(f"Debug - Reasoning length: {len(str(reasoning)) if reasoning else 0}")
+            
             return {
                 "content": response.choices[0].message.content,
+                "reasoning": reasoning,
                 "model": response.model,
                 "usage": response.usage.dict() if hasattr(response, 'usage') else {},
                 "executed_tools": getattr(response.choices[0].message, 'executed_tools', None)
@@ -119,6 +147,7 @@ class GroqClient:
         except Exception as e:
             return {
                 "content": f"Error: {str(e)}",
+                "reasoning": None,
                 "model": model,
                 "usage": {},
                 "executed_tools": None
@@ -132,6 +161,8 @@ class GroqClient:
                 "description": "Standard 20B parameter model",
                 "supports_streaming": True,
                 "supports_tools": False,
+                "supports_reasoning": True,
+                "reasoning_requires_non_streaming": True,
                 "max_tokens": 8192
             },
             "openai/gpt-oss-120b": {
@@ -139,6 +170,8 @@ class GroqClient:
                 "description": "Larger 120B parameter model",
                 "supports_streaming": True,
                 "supports_tools": False,
+                "supports_reasoning": True,
+                "reasoning_requires_non_streaming": True,
                 "max_tokens": 8192
             },
             "compound-beta": {
@@ -146,6 +179,8 @@ class GroqClient:
                 "description": "AI with web search & code execution (multiple tools)",
                 "supports_streaming": False,
                 "supports_tools": True,
+                "supports_reasoning": False,
+                "reasoning_requires_non_streaming": False,
                 "max_tokens": 8192
             },
             "compound-beta-mini": {
@@ -153,6 +188,8 @@ class GroqClient:
                 "description": "AI with web search & code execution (single tool, 3x faster)", 
                 "supports_streaming": False,
                 "supports_tools": True,
+                "supports_reasoning": False,
+                "reasoning_requires_non_streaming": False,
                 "max_tokens": 8192
             }
         }
@@ -162,5 +199,7 @@ class GroqClient:
             "description": "Unknown model",
             "supports_streaming": True,
             "supports_tools": False,
+            "supports_reasoning": False,
+            "reasoning_requires_non_streaming": False,
             "max_tokens": 8192
         })

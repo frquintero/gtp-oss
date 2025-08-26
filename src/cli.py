@@ -338,16 +338,42 @@ class GPTCLI:
         
         with Live(auto_refresh=True, console=self.console) as live:
             try:
-                if model_info.get('supports_streaming', True) and not model_info.get('supports_tools'):
-                    # Streaming response
+                # Determine if we should use streaming or non-streaming
+                reasoning_enabled = self.config.get('include_reasoning', True)
+                reasoning_requires_non_streaming = model_info.get('reasoning_requires_non_streaming', False)
+                force_non_streaming = reasoning_enabled and reasoning_requires_non_streaming
+                
+                use_streaming = (model_info.get('supports_streaming', True) and 
+                               not model_info.get('supports_tools') and 
+                               not force_non_streaming)
+                
+                # Debug: Show which path we're taking
+                self.console.print(f"[dim]Debug - Using streaming: {use_streaming}, Force non-streaming: {force_non_streaming}[/dim]")
+                
+                if use_streaming:
+                    # Streaming response for models that support it (when reasoning doesn't require non-streaming)
                     full_content = ""
+                    reasoning_content = None
                     
-                    for chunk in self.groq_client.stream_completion(api_messages, model):
-                        if chunk:
-                            full_content += chunk
+                    for chunk_data in self.groq_client.stream_completion(api_messages, model):
+                        if chunk_data.get("type") == "content":
+                            full_content += chunk_data.get("data", "")
+                        elif chunk_data.get("type") == "reasoning":
+                            reasoning_content = chunk_data.get("data")
+                        elif chunk_data.get("type") == "error":
+                            self.console.print(f"[red]Error: {chunk_data.get('data')}[/red]")
+                            return
                             
                         # Update display
                         panels = []
+                        
+                        # Show reasoning panel first (if available and enabled)
+                        if reasoning_content and self.config.get('show_reasoning_panel', True):
+                            reasoning_panel = self.panel_factory.create_reasoning_panel(reasoning_content)
+                            if reasoning_panel:
+                                panels.append(reasoning_panel)
+                        
+                        # Show response panel
                         if full_content:
                             panels.append(self.panel_factory.create_response_panel(full_content))
                         else:
@@ -361,23 +387,44 @@ class GPTCLI:
                         self.conversation.add_message("assistant", full_content)
                 
                 else:
-                    # Non-streaming response (for compound models)
-                    live.update(self.panel_factory.create_info_panel("Processing with AI tools...", "Status"))
+                    # Non-streaming response (for compound models, reasoning-enabled GPT-OSS, or when streaming disabled)
+                    if force_non_streaming and model_info.get('supports_reasoning'):
+                        live.update(self.panel_factory.create_info_panel("Processing with reasoning...", "Status"))
+                    else:
+                        live.update(self.panel_factory.create_info_panel("Processing with AI tools...", "Status"))
                     
                     response_data = self.groq_client.get_non_stream_completion(api_messages, model)
                     content = response_data.get('content', '')
+                    reasoning = response_data.get('reasoning')
                     executed_tools = response_data.get('executed_tools')
                     
-                    # Show tools usage if available
+                    # Debug: Check what we got
+                    self.console.print(f"[dim]Debug - Reasoning: {bool(reasoning)}, Content: {bool(content)}, Model: {model}[/dim]")
+                    
+                    # Prepare display panels
+                    panels = []
+                    
+                    # Show reasoning panel first (if available and enabled)
+                    if reasoning and self.config.get('show_reasoning_panel', True):
+                        reasoning_panel = self.panel_factory.create_reasoning_panel(reasoning)
+                        if reasoning_panel:
+                            panels.append(reasoning_panel)
+                    
+                    # Show response panel
+                    if content:
+                        panels.append(self.panel_factory.create_response_panel(content))
+                    
+                    # Show tools usage if available (after other panels)
                     if executed_tools:
                         tools_panel = self.panel_factory.create_tools_panel(len(executed_tools))
-                        self.console.print(tools_panel)
+                        panels.append(tools_panel)
                     
-                    # Show response
-                    if content:
-                        response_panel = self.panel_factory.create_response_panel(content)
-                        live.update(response_panel)
+                    # Update display with all panels at once
+                    if panels:
+                        live.update(Group(*panels))
                         self.conversation.add_message("assistant", content)
+                    else:
+                        live.update(self.panel_factory.create_error_panel("No response received"))
                     
             except KeyboardInterrupt:
                 self.console.print("\n[yellow]Response cancelled by user.[/yellow]")

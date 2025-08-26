@@ -124,10 +124,8 @@ class CommandValidator:
         
         # Lista de comandos válidos
         valid_commands = {
-            'help', 'new', 'clear', 'history', 'model',
-            'config', 'settings',
-            # file-related commands
-            'list', 'template'
+            'help', 'status', 'new', 'clear', 'history', 'model',
+            'config', 'settings', 'list', 'template'
         }
         
         # Solo es un comando si la primera palabra está en la lista de comandos válidos

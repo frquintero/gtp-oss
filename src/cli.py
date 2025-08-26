@@ -98,6 +98,91 @@ class GPTCLI:
         cursor_column = len(">> " + buffer_text) + 1
         sys.stdout.write(f"\033[1A\033[{cursor_column}G")
         sys.stdout.flush()
+    
+    def _clear_help_line(self):
+        """Clear the help line below the current cursor position."""
+        # Move down, clear the line, then move back up
+        sys.stdout.write("\n\033[2K\033[1A")
+        sys.stdout.flush()
+    
+    def _show_help(self):
+        """Show available commands and usage."""
+        help_text = """[bold cyan]Available Commands:[/bold cyan]
+
+[yellow]Chat & Conversation:[/yellow]
+  [cyan]new[/cyan]                    Start a new chat session
+  [cyan]clear[/cyan]                  Clear conversation history
+  [cyan]history[/cyan]                Show conversation history
+
+[yellow]Model Management:[/yellow]
+  [cyan]model[/cyan]                  Reset to default model
+  [cyan]model <name>[/cyan]           Switch to specific model
+
+[yellow]System:[/yellow]
+  [cyan]status[/cyan]                 Show current status and settings
+  [cyan]config[/cyan]                 Show current configuration
+  [cyan]help[/cyan]                   Show this help message
+
+[yellow]Interface:[/yellow]
+  [cyan]/[/cyan]                      Open command palette (fuzzy search)
+  [cyan]Ctrl+C[/cyan]                 Quit application (press twice)
+  [cyan]Ctrl+J[/cyan]                 Add newline to message
+
+[dim]Press [cyan]/[/cyan] for interactive command palette with search[/dim]"""
+        
+        self.console.print(help_text)
+    
+    def _show_status(self):
+        """Show current status and configuration."""
+        # Get conversation stats
+        message_count = len(self.conversation.messages)
+        
+        # Get model info
+        model_info = self.groq_client.get_model_info(self.current_model)
+        
+        status_text = f"""[bold cyan]Current Status:[/bold cyan]
+
+[yellow]Model:[/yellow] [green]{self.current_model}[/green]
+[yellow]Description:[/yellow] {model_info.get('description', 'Unknown')}
+[yellow]Supports Tools:[/yellow] {'Yes' if model_info.get('supports_tools') else 'No'}
+[yellow]Supports Reasoning:[/yellow] {'Yes' if model_info.get('supports_reasoning') else 'No'}
+
+[yellow]Conversation:[/yellow]
+[yellow]Messages:[/yellow] {message_count}
+[yellow]History Enabled:[/yellow] {'Yes' if self.config.get('save_history') else 'No'}
+
+[yellow]Reasoning Settings:[/yellow]
+[yellow]Effort Level:[/yellow] [cyan]{self.config.get('reasoning_effort', 'medium')}[/cyan]
+[yellow]Show Reasoning Panel:[/yellow] {'Yes' if self.config.get('show_reasoning_panel') else 'No'}
+[yellow]Include Reasoning:[/yellow] {'Yes' if self.config.get('include_reasoning') else 'No'}"""
+        
+        self.console.print(status_text)
+    
+    def _show_config(self):
+        """Show current configuration settings."""
+        config_text = f"""[bold cyan]Configuration Settings:[/bold cyan]
+
+[yellow]API & Model:[/yellow]
+[yellow]Default Model:[/yellow] {self.config.get('default_model')}
+[yellow]Max Tokens:[/yellow] {self.config.get('max_tokens')}
+[yellow]Temperature:[/yellow] {self.config.get('temperature')}
+
+[yellow]Reasoning:[/yellow]
+[yellow]Effort Level:[/yellow] [cyan]{self.config.get('reasoning_effort')}[/cyan]
+[yellow]Include Reasoning:[/yellow] {'Enabled' if self.config.get('include_reasoning') else 'Disabled'}
+[yellow]Show Reasoning Panel:[/yellow] {'Enabled' if self.config.get('show_reasoning_panel') else 'Disabled'}
+
+[yellow]History & Files:[/yellow]
+[yellow]Save History:[/yellow] {'Enabled' if self.config.get('save_history') else 'Disabled'}
+[yellow]History File:[/yellow] {self.config.get('history_file')}
+
+[yellow]Network:[/yellow]
+[yellow]Retry Attempts:[/yellow] {self.config.get('retry_attempts')}
+[yellow]Timeout:[/yellow] {self.config.get('timeout')}s
+
+[dim]Use command line arguments [cyan]--low[/cyan], [cyan]--medium[/cyan], [cyan]--max[/cyan], [cyan]--rpanel[/cyan] to override settings[/dim]"""
+        
+        self.console.print(config_text)
 
     def _reset_ctrl_c_state_and_restore_help(self):
         """Reset Ctrl+C state and restore original help message."""
@@ -495,8 +580,19 @@ class GPTCLI:
         command = cmd_info['command']
         args = cmd_info['args']
         
+        # Clear help line before command output to prevent overwriting
+        self._clear_help_line()
+        
         # Built-in commands
-        if command == 'new':
+        if command == 'help':
+            self._show_help()
+            return True
+            
+        elif command == 'status':
+            self._show_status()
+            return True
+            
+        elif command == 'new':
             self.conversation = Conversation()
             self.current_model = self.config.get('default_model', 'openai/gpt-oss-20b')
             self.console.print("[green]✅ Started new chat session.[/green]")
@@ -534,14 +630,18 @@ class GPTCLI:
                     self.console.print(f"[green]✅ Switched to model: {self.current_model}[/green]")
             return True
         
+        elif command == 'config' or command == 'settings':
+            self._show_config()
+            return True
+        
         # Try command handler for other commands
         result = self.command_handler.execute(user_input)
         if result is not None:
             return True
         
-        # Unknown command
+        # Unknown command - provide helpful error message
         self.console.print(f"[red]Unknown command: {command}[/red]")
-        self.console.print("Press [cyan]/[/cyan] to see available commands.")
+        self.console.print("Type [cyan]help[/cyan] for available commands or press [cyan]/[/cyan] for command palette.")
         return True
     
     def run(self):

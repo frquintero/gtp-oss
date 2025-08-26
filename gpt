@@ -16,6 +16,19 @@ fi
 # Change to the project directory to ensure relative paths work
 cd "$DIR"
 
+# Check if this is quick mode (arguments provided beyond just flags)
+# Quick mode is when user provides actual text input, not just flags
+QUICK_MODE=false
+for arg in "$@"; do
+    # Skip flags that start with --
+    if [[ ! "$arg" =~ ^-- ]]; then
+        QUICK_MODE=true
+        break
+    fi
+done
+
 # Use the enhanced version
-echo "Starting GPT CLI Enhanced v2.2.2..."
+if [ "$QUICK_MODE" = false ]; then
+    echo "Starting GPT CLI Enhanced v2.2.2..."
+fi
 $PYTHON gpt.py "$@"

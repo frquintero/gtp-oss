@@ -28,9 +28,10 @@ from ui.panels import PanelFactory, TableFactory
 class GPTCLI:
     """Enhanced GPT CLI with modular architecture."""
     
-    def __init__(self, config_path: str = "config.json", reasoning_effort: str = None, show_reasoning_panel: bool = None):
+    def __init__(self, config_path: str = "config.json", reasoning_effort: str = None, show_reasoning_panel: bool = None, quiet_mode: bool = False):
         # Initialize console first
         self.console = Console()
+        self.quiet_mode = quiet_mode
         
         # Load configuration
         self.config = Config()
@@ -40,18 +41,19 @@ class GPTCLI:
         # Override reasoning effort if provided via command line
         if reasoning_effort:
             self.config.set('reasoning_effort', reasoning_effort)
-            # Show reasoning effort confirmation
-            effort_display = {
-                'low': '[yellow]Low[/yellow] (faster responses)',
-                'medium': '[cyan]Medium[/cyan] (balanced)',
-                'high': '[green]High[/green] (maximum reasoning)'
-            }
-            self.console.print(f"Reasoning effort set to: {effort_display.get(reasoning_effort, reasoning_effort)}")
+            # Show reasoning effort confirmation only if not in quiet mode
+            if not self.quiet_mode:
+                effort_display = {
+                    'low': '[yellow]Low[/yellow] (faster responses)',
+                    'medium': '[cyan]Medium[/cyan] (balanced)',
+                    'high': '[green]High[/green] (maximum reasoning)'
+                }
+                self.console.print(f"Reasoning effort set to: {effort_display.get(reasoning_effort, reasoning_effort)}")
         
         # Override show_reasoning_panel if provided via command line
         if show_reasoning_panel is not None:
             self.config.set('show_reasoning_panel', show_reasoning_panel)
-            if show_reasoning_panel:
+            if show_reasoning_panel and not self.quiet_mode:
                 self.console.print("Reasoning panel: [green]Enabled[/green] (AI thinking process will be visible)")
         
         # Initialize components
@@ -87,14 +89,14 @@ class GPTCLI:
 
     def _print_help_message(self):
         """Print the help message below the current cursor position at left margin."""
-        # Save current cursor position
-        sys.stdout.write("\033[s")
         # Move to next line, go to column 1 (left margin), and clear line
         sys.stdout.write("\n\033[1G\033[2K")
         # Print help with colored commands
         sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m/\033[90m = command)\033[0m")
-        # Restore cursor position
-        sys.stdout.write("\033[u")
+        # Move back up one line and position cursor after ">> " plus any existing buffer content
+        buffer_text = ''.join(getattr(self, '_current_buffer', []))
+        cursor_column = len(">> " + buffer_text) + 1
+        sys.stdout.write(f"\033[1A\033[{cursor_column}G")
         sys.stdout.flush()
 
     def _reset_ctrl_c_state_and_restore_help(self):
@@ -104,7 +106,8 @@ class GPTCLI:
         sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m/\033[90m = command)\033[0m")
         # Calculate current buffer length to position cursor correctly
         buffer_text = ''.join(getattr(self, '_current_buffer', []))
-        sys.stdout.write("\033[1A\033[{}G".format(len(">> " + buffer_text) + 1))  # Move back up and position after current text
+        cursor_column = len(">> " + buffer_text) + 1
+        sys.stdout.write(f"\033[1A\033[{cursor_column}G")  # Move back up and position after current text
         sys.stdout.flush()
         return False  # Return False to reset ctrl_c_pressed_once
 
@@ -131,6 +134,9 @@ class GPTCLI:
                 self.console.print(f">> {line}")
             # Initialize buffer with prefill_text characters (including newlines)
             buffer = list(prefill_text)
+
+        # Store buffer reference for cursor positioning
+        self._current_buffer = buffer
 
         try:
             import termios
@@ -167,14 +173,16 @@ class GPTCLI:
                             # Clear help message line and replace with quit confirmation
                             sys.stdout.write("\n\033[1G\033[2K")  # Move down, go to left margin, clear line
                             sys.stdout.write("\033[91mCtrl+C again to quit\033[0m")  # Red color for attention
-                            sys.stdout.write("\033[1A\033[{}G".format(len(">> " + ''.join(buffer)) + 1))  # Move back up and position after current text
+                            # Move back up and position cursor after current text using relative positioning
+                            cursor_column = len(">> " + ''.join(buffer)) + 1
+                            sys.stdout.write(f"\033[1A\033[{cursor_column}G")
                             sys.stdout.flush()
                         continue
 
                     # Reset Ctrl+C state if any other key is pressed
                     if ctrl_c_pressed_once:
                         ctrl_c_pressed_once = self._reset_ctrl_c_state_and_restore_help()
-                        # Store current buffer for cursor positioning
+                        # Update current buffer reference for cursor positioning
                         self._current_buffer = buffer
 
                     # "/" -> open command palette (only if it's the first character)
@@ -229,18 +237,18 @@ class GPTCLI:
                         # Only allow newline if there's content in the buffer
                         if buffer and ''.join(buffer).strip():
                             buffer.append('\n')
+                            # Update current buffer reference
+                            self._current_buffer = buffer
                             # First, clear the help message that's currently below the cursor
                             sys.stdout.write("\n\033[2K")  # Move down and clear the help message line
                             sys.stdout.write("\033[1A")   # Move back up to the original line
                             # Now move to new line and print clean prompt at left margin
                             sys.stdout.write("\r\n>> ")
-                            # Save cursor position (after the new clean ">> ")
-                            sys.stdout.write("\033[s")
-                            # Move down and print help message on the line below
+                            # Move down and print help message on the line below using relative positioning
                             sys.stdout.write("\n\033[1G\033[2K")  # New line, go to left margin, clear line
                             sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m/\033[90m = command)\033[0m")
-                            # Restore cursor position to after the new clean ">>"
-                            sys.stdout.write("\033[u")
+                            # Move back up one line and position cursor after ">> "
+                            sys.stdout.write("\033[1A\033[4G")  # Move up and go to column 4 (after ">> ")
                             sys.stdout.flush()
                         # If buffer is empty, ignore the Ctrl+J
                         continue
@@ -249,6 +257,8 @@ class GPTCLI:
                     if ch in ("\x7f", "\x08"):
                         if buffer:
                             buffer.pop()
+                            # Update current buffer reference
+                            self._current_buffer = buffer
                             # Erase last character visually
                             sys.stdout.write("\b \b")
                             sys.stdout.flush()
@@ -277,6 +287,8 @@ class GPTCLI:
 
                     # Printable character -> echo and append
                     buffer.append(ch)
+                    # Update current buffer reference
+                    self._current_buffer = buffer
                     sys.stdout.write(ch)
                     sys.stdout.flush()
 
@@ -339,6 +351,32 @@ class GPTCLI:
             self.console.print(f"[red]Error opening command palette: {str(e)}[/red]")
             return "continue"
     
+    def get_quick_response(self, model: str = None) -> str:
+        """Get a quick response without UI formatting - for command line mode."""
+        if model is None:
+            model = self.current_model
+        
+        try:
+            # Get messages for API
+            api_messages = self.conversation.get_messages_for_api()
+            
+            # Get model info to determine the best approach
+            model_info = self.groq_client.get_model_info(model)
+            
+            # For quick responses, prefer non-streaming to get complete response at once
+            response_data = self.groq_client.get_non_stream_completion(api_messages, model)
+            content = response_data.get('content', '')
+            
+            if content:
+                # Add to conversation for consistency
+                self.conversation.add_message("assistant", content)
+                return content
+            else:
+                return "No response received"
+                
+        except Exception as e:
+            return f"Error: {str(e)}"
+
     def stream_response(self, model: str = None):
         """Stream response with enhanced UI."""
         if model is None:

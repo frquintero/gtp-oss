@@ -92,20 +92,26 @@ def main():
         sys.path.insert(0, str(src_path))
     
     try:
+        # Check if we have remaining command line arguments (user input)
+        quick_mode = bool(remaining_args)
+        
         # Importar y ejecutar la CLI
         from cli import GPTCLI
-        cli = GPTCLI(reasoning_effort=args.reasoning_effort, show_reasoning_panel=args.rpanel)
+        cli = GPTCLI(
+            reasoning_effort=args.reasoning_effort, 
+            show_reasoning_panel=args.rpanel,
+            quiet_mode=quick_mode  # Suppress startup messages in quick mode
+        )
         
-        # Check if we have remaining command line arguments (user input)
-        if remaining_args:
-            # Handle command line arguments
+        if quick_mode:
+            # Quick response mode: no formatting, just the response
             command = " ".join(remaining_args)
             if cli.handle_command(command):
                 return
             else:
-                # If not a command, treat as regular input
                 cli.conversation.add_message("user", command)
-                cli.stream_response()
+                response = cli.get_quick_response()
+                print(f">> {response}")
         else:
             # Run interactive mode
             cli.run()

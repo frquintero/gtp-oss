@@ -122,6 +122,7 @@ class GPTCLI:
 
 [yellow]Interface:[/yellow]
   [cyan]/[/cyan]                      Open command palette (fuzzy search)
+  [cyan]↑/↓ arrows[/cyan]             Navigate command history
   [cyan]Ctrl+C[/cyan]                 Quit application (press twice)
   [cyan]Ctrl+J[/cyan]                 Add newline to message
 
@@ -433,15 +434,12 @@ class GPTCLI:
         except Exception:
             pass
         self.display_welcome()
+        # Show status bar once at startup
+        self.display_status_bar()
         
         while True:
             try:
-                # lightweight status shown each iteration
-                try:
-                    self.display_status_bar()
-                except Exception:
-                    pass
-
+                # Remove the status bar from the loop to avoid cursor interference
                 user_input = self.get_multiline_input()
                 if not user_input:
                     continue

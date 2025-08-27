@@ -184,6 +184,7 @@ export GPT_DEFAULT_MODEL="openai/gpt-oss-20b"  # Optional
 - **Streaming Responses** - Real-time response streaming
 - **Math Rendering** - Automatic LaTeX-to-Unicode conversion (e.g., `$\alpha + \beta$` → `α + β`)
 - **Multiline Input** - Ctrl+J for newlines, Enter to send
+- **Command History** - Up/Down arrows for readline-style input navigation
 - **History Management** - Persistent conversation tracking
 
 ## 🚀 Advanced Features
@@ -198,7 +199,9 @@ When using compound models, the AI can:
 ### Raw Input Mode
 - **Enter** - Send message immediately
 - **Ctrl+J** - Add newline to message
+- **↑/↓ arrows** - Navigate command history (previous/next inputs)
 - **Ctrl+C** - Two-step exit (press twice to quit)
+- **Esc** - Two-step reset of current input: first Esc shows a confirmation hint; second Esc clears the current line and starts fresh
 - **/** - Open command palette
 
 ## 🏗️ Architecture
@@ -208,6 +211,7 @@ src/
 ├── cli.py              # Main CLI application orchestrator
 ├── utils/
 │   ├── terminal_input.py   # Terminal input handling and raw mode management
+│   ├── input_history.py    # Session-only command history for arrow key navigation
 │   ├── commands.py     # Command system
 │   ├── command_palette.py  # Command palette implementation
 │   ├── config.py       # Configuration management

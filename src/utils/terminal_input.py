@@ -1,7 +1,7 @@
 """Terminal input handler for managing multiline input and special key handling."""
 import sys
-import select
 from typing import Optional, List
+from .input_history import InputHistory
 
 
 class TerminalInputHandler:
@@ -11,6 +11,7 @@ class TerminalInputHandler:
         """Initialize with reference to parent CLI instance."""
         self.cli = cli_instance
         self._current_buffer = []
+        self.input_history = InputHistory(max_entries=100)
 
     def get_multiline_input(self, prefill_text: str = "") -> Optional[str]:
         """Get input using raw mode where:
@@ -26,6 +27,8 @@ class TerminalInputHandler:
         ctrl_c_pressed_once = False
         # State tracking for ESC double-press reset behavior
         esc_reset_pending = False
+        # State tracking for ESC sequence detection
+        pending_esc = False
 
         # Show any prefill content and initialize buffer
         buffer: list[str] = []
@@ -58,6 +61,51 @@ class TerminalInputHandler:
                     ch = sys.stdin.read(1)
                     if not ch:
                         continue
+
+                    # Handle pending ESC state first
+                    if pending_esc:
+                        pending_esc = False
+                        if ch == '[':
+                            # This is an escape sequence - read the final character
+                            final_ch = sys.stdin.read(1)
+                            if final_ch == 'A':  # Up arrow
+                                history_entry = self.input_history.get_previous(''.join(buffer))
+                                if history_entry is not None:
+                                    buffer = self._replace_buffer_with_history(buffer, history_entry)
+                                # Cancel ESC hint if visible
+                                if esc_reset_pending:
+                                    esc_reset_pending = self._reset_esc_state_and_restore_help()
+                                    self._current_buffer = buffer
+                                continue
+                            elif final_ch == 'B':  # Down arrow
+                                history_entry = self.input_history.get_next()
+                                if history_entry is not None:
+                                    buffer = self._replace_buffer_with_history(buffer, history_entry)
+                                else:
+                                    # At end of history - clear buffer
+                                    buffer = self._replace_buffer_with_history(buffer, "")
+                                # Cancel ESC hint if visible
+                                if esc_reset_pending:
+                                    esc_reset_pending = self._reset_esc_state_and_restore_help()
+                                    self._current_buffer = buffer
+                                continue
+                            else:
+                                # Other sequences - ignore
+                                if esc_reset_pending:
+                                    esc_reset_pending = self._reset_esc_state_and_restore_help()
+                                    self._current_buffer = buffer
+                                continue
+                        else:
+                            # ESC followed by non-bracket
+                            # If it's another ESC, treat as double-ESC reset; otherwise, fall through.
+                            if ch == "\x1b":
+                                current_text = ''.join(buffer)
+                                has_content = bool(current_text.strip())
+                                if has_content and esc_reset_pending:
+                                    buffer = self._clear_current_input_and_redraw(buffer)
+                                    esc_reset_pending = False
+                                    continue
+                            # For any other non-ESC char, do nothing here; normal handling below will run
 
                     # Ctrl+C -> two-step quit mechanism
                     if ch == "\x03":
@@ -195,63 +243,26 @@ class TerminalInputHandler:
                             sys.stdout.flush()
                         continue
 
-                    # Handle ESC: either escape sequences (arrows, etc.) or double-press reset
+                    # Handle ESC: set pending state and show hint immediately (plain ESC)
                     if ch == "\x1b":
-                        try:
-                            # Peek for immediate next byte(s) to detect an escape sequence
-                            r, _, _ = select.select([sys.stdin], [], [], 0.01)
-                            if r:
-                                # There is more input immediately; consume typical escape sequence bytes
-                                next1 = sys.stdin.read(1)
-                                if next1 == "[":
-                                    # Read the final character of the escape sequence and ignore
-                                    _ = sys.stdin.read(1)
-                                    # Cancel ESC hint if visible
-                                    if esc_reset_pending:
-                                        esc_reset_pending = self._reset_esc_state_and_restore_help()
-                                        self._current_buffer = buffer
-                                    continue
-                                else:
-                                    # Possibly Alt+key; ignore
-                                    if esc_reset_pending:
-                                        esc_reset_pending = self._reset_esc_state_and_restore_help()
-                                        self._current_buffer = buffer
-                                    continue
+                        # Assume plain ESC until proven sequence; show/cycle hint now
+                        current_text = ''.join(buffer)
+                        has_content = bool(current_text.strip())
+                        if has_content:
+                            if esc_reset_pending:
+                                buffer = self._clear_current_input_and_redraw(buffer)
+                                esc_reset_pending = False
                             else:
-                                # Plain ESC with no immediate sequence -> double-press reset logic
-                                current_text = ''.join(buffer)
-                                has_content = bool(current_text.strip())
-                                if not has_content:
-                                    if esc_reset_pending:
-                                        esc_reset_pending = self._reset_esc_state_and_restore_help()
-                                    continue
-                                if esc_reset_pending:
-                                    # Second ESC: clear current input and reset prompt
-                                    lines = current_text.count('\n') + 1
-                                    sys.stdout.write("\n\033[2K")  # clear help below
-                                    sys.stdout.write("\033[1A")     # back to current line
-                                    for i in range(lines):
-                                        sys.stdout.write("\r\033[2K")
-                                        if i < lines - 1:
-                                            sys.stdout.write("\033[1A")
-                                    buffer = []
-                                    self._current_buffer = buffer
-                                    esc_reset_pending = False
-                                    sys.stdout.write(">> ")
-                                    sys.stdout.flush()
-                                    self._print_help_message()
-                                    continue
-                                else:
-                                    # First ESC: show confirmation hint
-                                    esc_reset_pending = True
-                                    self._show_esc_reset_message()
-                                    continue
-                        except Exception:
-                            # If anything goes wrong, ignore ESC gracefully
-                            continue
+                                esc_reset_pending = True
+                                self._show_esc_reset_message()
+                        # Now mark that an escape sequence might follow (for arrows)
+                        pending_esc = True
+                        continue
 
                     # Printable character -> echo and append
                     buffer.append(ch)
+                    # Reset history position when user starts typing new content
+                    self.input_history.reset_position()
                     # Update current buffer reference
                     self._current_buffer = buffer
                     sys.stdout.write(ch)
@@ -287,6 +298,8 @@ class TerminalInputHandler:
             self.cli.console.print("[yellow]Empty prompt cancelled.[/yellow]")
             return None
 
+        # Add to history before returning
+        self.input_history.add_entry(content)
         return content
 
     def _print_help_message(self):
@@ -294,7 +307,7 @@ class TerminalInputHandler:
         # Move to next line, go to column 1 (left margin), and clear line
         sys.stdout.write("\n\033[1G\033[2K")
         # Print help with colored commands
-        sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m/\033[90m = command)\033[0m")
+        sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m↑↓\033[90m = history, \033[36m/\033[90m = command)\033[0m")
         # Move back up one line and position cursor after ">> " plus any existing buffer content
         buffer_text = ''.join(getattr(self, '_current_buffer', []))
         # Compute position within the current (last) line only
@@ -309,11 +322,63 @@ class TerminalInputHandler:
         sys.stdout.write("\n\033[2K\033[1A")
         sys.stdout.flush()
 
+    def _clear_current_input_and_redraw(self, current_buffer: List[str]) -> List[str]:
+        """Clear all lines of current input, redraw prompt, and return a fresh buffer."""
+        current_text = ''.join(current_buffer)
+        lines = current_text.count('\n') + 1
+        # Clear help line below, then clear all input lines
+        sys.stdout.write("\n\033[2K")  # clear help below
+        sys.stdout.write("\033[1A")     # back to current line
+        for i in range(lines):
+            sys.stdout.write("\r\033[2K")
+            if i < lines - 1:
+                sys.stdout.write("\033[1A")
+        # Reset buffer and redraw prompt + help
+        new_buffer: List[str] = []
+        self._current_buffer = new_buffer
+        sys.stdout.write(">> ")
+        sys.stdout.flush()
+        self._print_help_message()
+        return new_buffer
+
+    def _replace_buffer_with_history(self, current_buffer: List[str], history_entry: str) -> List[str]:
+        """Replace current buffer with history entry and update display."""
+        # Calculate how many lines current buffer occupies
+        current_text = ''.join(current_buffer)
+        current_lines = current_text.count('\n') + 1
+        
+        # Clear help line first
+        sys.stdout.write("\n\033[2K")  # Clear help below
+        sys.stdout.write("\033[1A")     # Back to current line
+        
+        # Clear all lines of current input by moving up and clearing each line
+        for i in range(current_lines):
+            sys.stdout.write("\r\033[2K")  # Go to beginning of line and clear completely
+            if i < current_lines - 1:
+                sys.stdout.write("\033[1A")  # Move up to previous line
+        
+        # Now we're at the first line, positioned at column 0
+        # Display the prompt and new content
+        sys.stdout.write(">> ")
+        if history_entry:
+            sys.stdout.write(history_entry)
+        
+        # Create new buffer from history entry
+        new_buffer = list(history_entry) if history_entry else []
+        self._current_buffer = new_buffer
+        
+        sys.stdout.flush()
+        
+        # Restore help message
+        self._print_help_message()
+        
+        return new_buffer
+
     def _reset_ctrl_c_state_and_restore_help(self):
         """Reset Ctrl+C state and restore original help message."""
         # Clear quit confirmation message and restore help
         sys.stdout.write("\n\033[1G\033[2K")  # Move down, go to left margin, clear line
-        sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m/\033[90m = command)\033[0m")
+        sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m↑↓\033[90m = history, \033[36m/\033[90m = command)\033[0m")
         # Calculate current buffer length to position cursor correctly
         buffer_text = ''.join(getattr(self, '_current_buffer', []))
         cursor_column = len(">> " + buffer_text) + 1

@@ -103,7 +103,9 @@ class GPTCLI:
         sys.stdout.write("\033[90m(\033[36mEnter\033[90m = send, \033[36mCtrl+J\033[90m = newline, \033[36mCtrl+C\033[90m = quit, \033[36m/\033[90m = command)\033[0m")
         # Move back up one line and position cursor after ">> " plus any existing buffer content
         buffer_text = ''.join(getattr(self, '_current_buffer', []))
-        cursor_column = len(">> " + buffer_text) + 1
+        # Compute position within the current (last) line only
+        last_line_len = len(buffer_text.split('\n')[-1])
+        cursor_column = 4 + last_line_len  # after ">> "
         sys.stdout.write(f"\033[1A\033[{cursor_column}G")
         sys.stdout.flush()
     
@@ -204,6 +206,23 @@ class GPTCLI:
         sys.stdout.flush()
         return False  # Return False to reset ctrl_c_pressed_once
 
+    def _show_esc_reset_message(self):
+        """Show the red confirmation message for ESC-based reset on the help line."""
+        # Clear help message line and replace with confirmation
+        sys.stdout.write("\n\033[1G\033[2K")  # Move down, go to left margin, clear line
+        sys.stdout.write("\033[91mHit Esc again to start over\033[0m")  # Red color
+        # Move back up and position cursor after current text using relative positioning
+        buffer_text = ''.join(getattr(self, '_current_buffer', []))
+        last_line_len = len(buffer_text.split('\n')[-1])
+        cursor_column = 4 + last_line_len
+        sys.stdout.write(f"\033[1A\033[{cursor_column}G")
+        sys.stdout.flush()
+
+    def _reset_esc_state_and_restore_help(self):
+        """Restore the normal help line after an ESC confirmation hint."""
+        self._print_help_message()
+        return False  # Return False to reset esc_reset_pending
+
 
 
     def get_multiline_input(self, prefill_text: str = "") -> Optional[str]:
@@ -218,6 +237,8 @@ class GPTCLI:
         
         # State tracking for Ctrl+C behavior
         ctrl_c_pressed_once = False
+        # State tracking for ESC double-press reset behavior
+        esc_reset_pending = False
         
         # Show any prefill content and initialize buffer
         buffer: list[str] = []
@@ -279,6 +300,12 @@ class GPTCLI:
                         # Update current buffer reference for cursor positioning
                         self._current_buffer = buffer
 
+                    # Reset ESC reset state if a non-ESC key is pressed
+                    if esc_reset_pending and ch != "\x1b":
+                        esc_reset_pending = self._reset_esc_state_and_restore_help()
+                        # Update current buffer reference for cursor positioning
+                        self._current_buffer = buffer
+
                     # "/" -> open command palette (only if it's the first character)
                     if ch == "/" and not buffer:
                         # Restore terminal first
@@ -326,10 +353,12 @@ class GPTCLI:
                             sys.stdout.flush()
                             break
 
-                    # Ctrl+J (line feed, ASCII 10) -> insert newline into message
+                    # Ctrl+J (line feed, ASCII 10) -> insert newline only when current line has text
                     if ch == "\x0a":
-                        # Only allow newline if there's content in the buffer
-                        if buffer and ''.join(buffer).strip():
+                        # Only allow newline if the current line (after last \n) has content
+                        current_text = ''.join(buffer)
+                        last_line_text = current_text.split('\n')[-1]
+                        if len(last_line_text) > 0:
                             buffer.append('\n')
                             # Update current buffer reference
                             self._current_buffer = buffer
@@ -344,39 +373,96 @@ class GPTCLI:
                             # Move back up one line and position cursor after ">> "
                             sys.stdout.write("\033[1A\033[4G")  # Move up and go to column 4 (after ">> ")
                             sys.stdout.flush()
-                        # If buffer is empty, ignore the Ctrl+J
+                        # If current line is empty, ignore Ctrl+J
                         continue
 
-                    # Backspace handling
+                    # Backspace handling (prevent deleting the '>> ' prompt)
                     if ch in ("\x7f", "\x08"):
-                        if buffer:
+                        if not buffer:
+                            continue
+                        current_text = ''.join(buffer)
+                        last_line = current_text.split('\n')[-1]
+                        if buffer[-1] == '\n' or len(last_line) == 0:
+                            # At start of a line: if last char is a newline, remove the empty line safely
+                            if buffer[-1] == '\n':
+                                # Remove newline from buffer
+                                buffer.pop()
+                                self._current_buffer = buffer
+                                # Clear help line and current empty prompt line, then move to previous line end
+                                sys.stdout.write("\n\033[2K")  # clear help below
+                                sys.stdout.write("\033[1A")     # back to current line
+                                sys.stdout.write("\r\033[2K")   # clear current line (the '>> ')
+                                sys.stdout.write("\033[1A")     # move to previous line
+                                # Move cursor to end of previous line content
+                                prev_text = ''.join(buffer)
+                                prev_last_len = len(prev_text.split('\n')[-1])
+                                sys.stdout.write(f"\033[{4 + prev_last_len}G")
+                                # Reprint help below previous line and restore cursor
+                                self._print_help_message()
+                            # If not a newline, and at column 0 for this line, do nothing (protect '>> ')
+                            continue
+                        else:
+                            # Normal character deletion within the line
                             buffer.pop()
-                            # Update current buffer reference
                             self._current_buffer = buffer
-                            # Erase last character visually
                             sys.stdout.write("\b \b")
                             sys.stdout.flush()
                         continue
 
-                    # Handle escape sequences (arrow keys, etc.) - ignore them
-                    if ch == "\x1b":  # ESC character starts escape sequences
+                    # Handle ESC: either escape sequences (arrows, etc.) or double-press reset
+                    if ch == "\x1b":
                         try:
-                            # Read the next character to see if it's a bracket
-                            next1 = sys.stdin.read(1)
-                            if next1 == "[":
-                                # Read the final character of the escape sequence
-                                next2 = sys.stdin.read(1)
-                                # Common escape sequences we want to ignore:
-                                # Arrow keys: A=up, B=down, C=right, D=left
-                                # Function keys, home, end, etc.
-                                # Just ignore all of them in the main input loop
-                                continue
+                            import select
+                            # Peek for immediate next byte(s) to detect an escape sequence
+                            r, _, _ = select.select([sys.stdin], [], [], 0.01)
+                            if r:
+                                # There is more input immediately; consume typical escape sequence bytes
+                                next1 = sys.stdin.read(1)
+                                if next1 == "[":
+                                    # Read the final character of the escape sequence and ignore
+                                    _ = sys.stdin.read(1)
+                                    # Cancel ESC hint if visible
+                                    if esc_reset_pending:
+                                        esc_reset_pending = self._reset_esc_state_and_restore_help()
+                                        self._current_buffer = buffer
+                                    continue
+                                else:
+                                    # Possibly Alt+key; ignore
+                                    if esc_reset_pending:
+                                        esc_reset_pending = self._reset_esc_state_and_restore_help()
+                                        self._current_buffer = buffer
+                                    continue
                             else:
-                                # If it's not a bracket, it might be Alt+key or other sequence
-                                # Just ignore the whole thing
-                                continue
-                        except:
-                            # If we can't read more characters, just ignore the escape
+                                # Plain ESC with no immediate sequence -> double-press reset logic
+                                current_text = ''.join(buffer)
+                                has_content = bool(current_text.strip())
+                                if not has_content:
+                                    if esc_reset_pending:
+                                        esc_reset_pending = self._reset_esc_state_and_restore_help()
+                                    continue
+                                if esc_reset_pending:
+                                    # Second ESC: clear current input and reset prompt
+                                    lines = current_text.count('\n') + 1
+                                    sys.stdout.write("\n\033[2K")  # clear help below
+                                    sys.stdout.write("\033[1A")     # back to current line
+                                    for i in range(lines):
+                                        sys.stdout.write("\r\033[2K")
+                                        if i < lines - 1:
+                                            sys.stdout.write("\033[1A")
+                                    buffer = []
+                                    self._current_buffer = buffer
+                                    esc_reset_pending = False
+                                    sys.stdout.write(">> ")
+                                    sys.stdout.flush()
+                                    self._print_help_message()
+                                    continue
+                                else:
+                                    # First ESC: show confirmation hint
+                                    esc_reset_pending = True
+                                    self._show_esc_reset_message()
+                                    continue
+                        except Exception:
+                            # If anything goes wrong, ignore ESC gracefully
                             continue
 
                     # Printable character -> echo and append

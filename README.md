@@ -32,24 +32,24 @@ pip install -r requirements.txt
 export GROQ_API_KEY="your-api-key-here"
 
 # Run the CLI
-./gpt
+./gptv2
 
 # Or with reasoning effort control
-./gpt --low     # Fast responses with low reasoning effort
-./gpt --medium  # Balanced responses (default)
-./gpt --max     # Maximum reasoning effort for complex problems
+./gptv2 --low     # Fast responses with low reasoning effort
+./gptv2 --medium  # Balanced responses (default)
+./gptv2 --max     # Maximum reasoning effort for complex problems
 
 # Or with reasoning panel visible
-./gpt --rpanel  # Show AI thinking process in UI
+./gptv2 --rpanel  # Show AI thinking process in UI
 
 # Combine options for maximum insight
-./gpt --max --rpanel  # Maximum reasoning with visible thinking process
+./gptv2 --max --rpanel  # Maximum reasoning with visible thinking process
 
 # Screen clearing on startup
 # The app clears the terminal when starting interactive mode.
 # Disable with flag or env var if you prefer:
-./gpt --no-clear      # Do not clear the terminal on start
-GPT_CLEAR_ON_START=0 ./gpt   # Env var override (0/false disables)
+./gptv2 --no-clear      # Do not clear the terminal on start
+GPT_CLEAR_ON_START=0 ./gptv2   # Env var override (0/false disables)
 ```
 
 ## 🎯 Command Palette Usage
@@ -84,17 +84,17 @@ Control the AI's reasoning effort level for different use cases:
 
 ### Command Line Options
 ```bash
-./gpt --low     # Low reasoning effort - faster responses for simple tasks
-./gpt --medium  # Medium reasoning effort - balanced performance (default)
-./gpt --max     # Maximum reasoning effort - deep thinking for complex problems
-./gpt --rpanel  # Show reasoning panel - displays AI thinking process in UI
+./gptv2 --low     # Low reasoning effort - faster responses for simple tasks
+./gptv2 --medium  # Medium reasoning effort - balanced performance (default)
+./gptv2 --max     # Maximum reasoning effort - deep thinking for complex problems
+./gptv2 --rpanel  # Show reasoning panel - displays AI thinking process in UI
 ```
 
 ### Advanced Usage
 ```bash
 # Combine reasoning effort with visible thinking process
-./gpt --max --rpanel    # Maximum reasoning with visible AI thinking
-./gpt --low --rpanel    # Fast responses with visible thinking process
+./gptv2 --max --rpanel    # Maximum reasoning with visible AI thinking
+./gptv2 --low --rpanel    # Fast responses with visible thinking process
 ```
 
 ### When to Use Each Level
@@ -117,7 +117,7 @@ You can also set the default reasoning effort and panel visibility in `config.js
 
 ### Starting a Conversation
 ```bash
-./gpt
+./gptv2
 >> Hello, how can you help me today?
 ```
 

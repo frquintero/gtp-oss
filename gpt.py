@@ -10,25 +10,25 @@ from pathlib import Path
 
 def parse_arguments():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        prog='gpt',  # Set the program name to 'gpt' instead of 'gpt.py'
-        description="GPT CLI Enhanced - Interactive AI assistant with reasoning effort control",
-        epilog="""
+        parser = argparse.ArgumentParser(
+                prog='gptv2',  # Set the program name to 'gptv2' instead of 'gpt.py'
+                description="GPT CLI Enhanced - Interactive AI assistant with reasoning effort control",
+                epilog="""
 Examples:
-  ./gpt                  # Start interactive mode with default settings
-  ./gpt --low           # Use low reasoning effort (faster)
-  ./gpt --medium        # Use medium reasoning effort (default)
-  ./gpt --max           # Use maximum reasoning effort (deeper thinking)
-  ./gpt --rpanel        # Show reasoning panel in UI (displays AI thinking)
-  ./gpt --max --rpanel  # Maximum reasoning with visible thinking process
-  ./gpt "Hello world"   # Send message directly from command line
-  ./gpt --help          # Show this help message
+    ./gptv2                  # Start interactive mode with default settings
+    ./gptv2 --low           # Use low reasoning effort (faster)
+    ./gptv2 --medium        # Use medium reasoning effort (default)
+    ./gptv2 --max           # Use maximum reasoning effort (deeper thinking)
+    ./gptv2 --rpanel        # Show reasoning panel in UI (displays AI thinking)
+    ./gptv2 --max --rpanel  # Maximum reasoning with visible thinking process
+    ./gptv2 "Hello world"   # Send message directly from command line
+    ./gptv2 --help          # Show this help message
 
 For more information, visit: https://github.com/frquintero/gtp-oss
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        add_help=False  # We'll handle help manually to avoid conflicts
-    )
+                """,
+                formatter_class=argparse.RawDescriptionHelpFormatter,
+                add_help=False  # We'll handle help manually to avoid conflicts
+        )
     
     # Reasoning effort flags (mutually exclusive)
     reasoning_group = parser.add_mutually_exclusive_group()

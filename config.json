@@ -1,0 +1,18 @@
+{
+  "default_model": "openai/gpt-oss-20b",
+  "max_tokens": 8192,
+  "temperature": 1.0,
+  "save_history": true,
+  "history_file": "conversation_history.json",
+  "retry_attempts": 3,
+  "timeout": 30,
+  "reasoning_effort": "low",
+  "include_reasoning": true,
+  "show_reasoning_panel": false,
+  "thinking_mode": "normal",
+  "ui": {
+    "max_panel_height": 15,
+    "color_scheme": "default"
+  },
+  "clear_on_start": false
+}

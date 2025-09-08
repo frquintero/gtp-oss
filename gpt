@@ -1,0 +1,56 @@
+#!/bin/bash
+#!/bin/bash
+# GPT CLI Enhanced v2.2 - Launcher
+# Ensures compatibility across different Python environments
+
+# Get the directory where this script is located
+DIR="$( cd "$( dirname "$(readlink -f "${BASH_SOURCE[0]}")" )" &> /dev/null && pwd )"
+
+# Use the virtual environment Python if available, otherwise system Python
+if [ -f "$DIR/.venv/bin/python" ]; then
+    PYTHON="$DIR/.venv/bin/python"
+else
+    PYTHON="python3"
+fi
+
+# Change to the project directory to ensure relative paths work
+cd "$DIR"
+
+# Check if this is quick mode (arguments provided beyond just flags)
+# Quick mode is when user provides actual text input, not just flags
+QUICK_MODE=false
+for arg in "$@"; do
+    # Skip flags that start with --
+    if [[ ! "$arg" =~ ^-- ]]; then
+        QUICK_MODE=true
+        break
+    fi
+done
+
+#!/bin/bash
+# Determine if user requested no-clear via flag or env
+NO_CLEAR=false
+for arg in "$@"; do
+    if [ "$arg" = "--no-clear" ]; then
+        NO_CLEAR=true
+        break
+    fi
+done
+
+# Env-based override: GPT_CLEAR_ON_START=0/false disables clearing
+if [ -n "${GPT_CLEAR_ON_START}" ]; then
+    case "${GPT_CLEAR_ON_START}" in
+        0|false|False|FALSE)
+            NO_CLEAR=true
+            ;;
+    esac
+fi
+
+# Clear the screen before starting (interactive only, not quick mode)
+if [ -t 1 ] && [ "$QUICK_MODE" = false ] && [ "$NO_CLEAR" = false ]; then
+    clear
+    export GPT_ALREADY_CLEARED=1
+fi
+
+# Use the enhanced version (no extra launcher banner)
+$PYTHON gpt.py "$@"

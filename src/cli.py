@@ -1,0 +1,588 @@
+"""Main CLI application - Refactored version."""
+#!/usr/bin/env python3
+
+import sys
+import os
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+from rich.console import Console
+from rich.live import Live
+from rich.console import Group
+from rich.panel import Panel
+
+# Configurar el path para las importaciones
+current_dir = Path(__file__).parent
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
+
+# Imports desde los módulos del proyecto
+from models.conversation import Conversation
+from models.message import Message
+from services.groq_client import GroqClient
+from services.analysis_manager import AnalysisManager
+from services.prompt_engine import PromptEngine
+from utils.config import Config
+from utils.validators import InputValidator, CommandValidator
+from utils.commands import CommandHandler
+from utils.terminal_input import TerminalInputHandler
+from ui.panels import PanelFactory, TableFactory
+# TextFormatter removed - was unused
+
+
+class GPTCLI:
+    """Enhanced GPT CLI with modular architecture."""
+
+    def __init__(self, config_path: str = "config.json", reasoning_effort: str = None, show_reasoning_panel: bool = None, clear_on_start: 'Optional[bool]' = None, quiet_mode: bool = False):
+        # Initialize console first
+        self.console = Console()
+        self.quiet_mode = quiet_mode
+        self.config_path = config_path  # Store config path for saving
+        
+        # Load configuration
+        self.config = Config()
+        if os.path.exists(config_path):
+            self.config.load_from_file(config_path)
+        
+        # Override reasoning effort if provided via command line
+        if reasoning_effort:
+            self.config.set('reasoning_effort', reasoning_effort)
+            # Show reasoning effort confirmation only if not in quiet mode
+            if not self.quiet_mode:
+                effort_display = {
+                    'low': '[yellow]Low[/yellow] (faster responses)',
+                    'medium': '[cyan]Medium[/cyan] (balanced)',
+                    'high': '[green]High[/green] (maximum reasoning)'
+                }
+                self.console.print(f"Reasoning effort set to: {effort_display.get(reasoning_effort, reasoning_effort)}")
+        
+        # Override show_reasoning_panel if provided via command line
+        if show_reasoning_panel is not None:
+            self.config.set('show_reasoning_panel', show_reasoning_panel)
+            if show_reasoning_panel and not self.quiet_mode:
+                self.console.print("Reasoning panel: [green]Enabled[/green] (AI thinking process will be visible)")
+        
+        # Override clear_on_start if provided via command line / entry wrapper
+        if clear_on_start is not None:
+            try:
+                self.config.set('clear_on_start', bool(clear_on_start))
+            except Exception:
+                self.config.settings['clear_on_start'] = bool(clear_on_start)
+        
+        # Initialize components
+        self.conversation = Conversation()
+        self.groq_client = GroqClient(self.config.settings)
+        self.command_handler = CommandHandler(self)
+        self.input_handler = TerminalInputHandler(self)
+        
+        # Initialize analysis components
+        self.prompt_engine = PromptEngine(self.groq_client)
+        self.analysis_manager = AnalysisManager(self.groq_client, self.prompt_engine)
+        
+        # UI components
+        self.panel_factory = PanelFactory(
+            self.console, 
+            max_height=max(10, self.console.height // 4)
+        )
+        self.table_factory = TableFactory()
+        
+        # Current state
+        self.current_model = self.config.get('default_model', 'openai/gpt-oss-20b')
+        
+    def display_welcome(self):
+        """Display compact welcome message."""
+        thinking_mode = self.config.get('thinking_mode', 'normal')
+        
+        if thinking_mode == 'hard':
+            mode_info = "[red]🔍 Hard Thinking Mode (8-step analysis)[/red]"
+        else:
+            mode_info = "[green]⚡ Normal Thinking Mode (fast responses)[/green]"
+        
+        # Two-line welcome message without frame
+        self.console.print("[bold cyan]GPT CLI Enhanced[/bold cyan]")
+        self.console.print(f"{mode_info}")
+        self.console.print("To get started, describe a task or press [cyan]/[/cyan] for commands")
+
+    def display_status_bar(self):
+        """Print a minimal status bar with current model and stream hint."""
+        model = getattr(self, 'current_model', None) or "unknown"
+        thinking_mode = self.config.get('thinking_mode', 'normal')
+        
+        if thinking_mode == 'hard':
+            thinking_display = "[red]🔍 Hard[/red]"
+        else:
+            thinking_display = "[green]⚡ Normal[/green]"
+        
+        status = f"[dim]Model:[/dim] [cyan]{model}[/cyan]   [dim]Thinking:[/dim] {thinking_display}   [dim]Mode:[/dim] [green]interactive[/green]"
+        # Keep it minimal and not persistent; print before prompt each loop
+        try:
+            self.console.print(status, overflow="ellipsis")
+        except Exception:
+            print(status)
+
+    def _clear_help_line(self):
+        """Clear the help line below the current cursor position."""
+        # Move down, clear the line, then move back up
+        sys.stdout.write("\n\033[2K\033[1A")
+        sys.stdout.flush()
+    
+    def _show_help(self):
+        """Show available commands and usage."""
+        # Check current thinking mode
+        thinking_mode = self.config.get('thinking_mode', 'normal')
+        
+        if thinking_mode == 'hard':
+            title_color = "[bold red]"
+            mode_indicator = "\n[red]🔍 HARD THINKING MODE ACTIVE - Using 8-step deep analysis[/red]\n"
+        else:
+            title_color = "[bold cyan]"
+            mode_indicator = "\n[green]⚡ NORMAL THINKING MODE - Fast responses[/green]\n"
+        
+        help_text = f"""{title_color}Available Commands:{title_color}
+
+[yellow]Chat & Conversation:[/yellow]
+  [cyan]new[/cyan]                    Start a new chat session
+  [cyan]clear[/cyan]                  Clear conversation history
+  [cyan]history[/cyan]                Show conversation history
+
+[yellow]Model Management:[/yellow]
+  [cyan]model[/cyan]                  Reset to default model
+  [cyan]model <name>[/cyan]           Switch to specific model
+
+[yellow]System:[/yellow]
+  [cyan]status[/cyan]                 Show current status and settings
+  [cyan]config[/cyan]                 Show current configuration
+  [cyan]thinking[/cyan]               Toggle between normal/hard thinking modes
+  [cyan]help[/cyan]                   Show this help message
+
+[yellow]Interface:[/yellow]
+  [cyan]/[/cyan]                      Open command palette (fuzzy search)
+  [cyan]↑/↓ arrows[/cyan]             Navigate command history
+  [cyan]Ctrl+C[/cyan]                 Quit application (press twice)
+  [cyan]Ctrl+J[/cyan]                 Add newline to message
+
+[dim]Press [cyan]/[/cyan] for interactive command palette with search[/dim]"""
+        
+        # Print mode indicator first, then help text
+        if thinking_mode == 'hard':
+            self.console.print(mode_indicator)
+        else:
+            self.console.print(mode_indicator)
+        
+        self.console.print(help_text)
+    
+    def _show_status(self):
+        """Show current status and configuration."""
+        # Get conversation stats
+        message_count = len(self.conversation.messages)
+        
+        # Get model info
+        model_info = self.groq_client.get_model_info(self.current_model)
+        
+        status_text = f"""[bold cyan]Current Status:[/bold cyan]
+
+[yellow]Model:[/yellow] [green]{self.current_model}[/green]
+[yellow]Description:[/yellow] {model_info.get('description', 'Unknown')}
+[yellow]Supports Tools:[/yellow] {'Yes' if model_info.get('supports_tools') else 'No'}
+[yellow]Supports Reasoning:[/yellow] {'Yes' if model_info.get('supports_reasoning') else 'No'}
+
+[yellow]Conversation:[/yellow]
+[yellow]Messages:[/yellow] {message_count}
+[yellow]History Enabled:[/yellow] {'Yes' if self.config.get('save_history') else 'No'}
+
+[yellow]Reasoning Settings:[/yellow]
+[yellow]Effort Level:[/yellow] [cyan]{self.config.get('reasoning_effort', 'medium')}[/cyan]
+[yellow]Show Reasoning Panel:[/yellow] {'Yes' if self.config.get('show_reasoning_panel') else 'No'}
+[yellow]Include Reasoning:[/yellow] {'Yes' if self.config.get('include_reasoning') else 'No'}"""
+        
+        self.console.print(status_text)
+    
+    def _show_config(self):
+        """Show current configuration settings."""
+        config_text = f"""[bold cyan]Configuration Settings:[/bold cyan]
+
+[yellow]API & Model:[/yellow]
+[yellow]Default Model:[/yellow] {self.config.get('default_model')}
+[yellow]Max Tokens:[/yellow] {self.config.get('max_tokens')}
+[yellow]Temperature:[/yellow] {self.config.get('temperature')}
+
+[yellow]Reasoning:[/yellow]
+[yellow]Effort Level:[/yellow] [cyan]{self.config.get('reasoning_effort')}[/cyan]
+[yellow]Include Reasoning:[/yellow] {'Enabled' if self.config.get('include_reasoning') else 'Disabled'}
+[yellow]Show Reasoning Panel:[/yellow] {'Enabled' if self.config.get('show_reasoning_panel') else 'Disabled'}
+
+[yellow]History & Files:[/yellow]
+[yellow]Save History:[/yellow] {'Enabled' if self.config.get('save_history') else 'Disabled'}
+[yellow]History File:[/yellow] {self.config.get('history_file')}
+
+[yellow]Network:[/yellow]
+[yellow]Retry Attempts:[/yellow] {self.config.get('retry_attempts')}
+[yellow]Timeout:[/yellow] {self.config.get('timeout')}s
+
+[dim]Use command line arguments [cyan]--low[/cyan], [cyan]--medium[/cyan], [cyan]--max[/cyan], [cyan]--rpanel[/cyan] to override settings[/dim]"""
+        
+        self.console.print(config_text)
+
+
+
+
+
+    def _handle_hard_thinking(self, user_query: str) -> None:
+        """Handle hard thinking mode with 8-step optimized prompt sequence."""
+        try:
+            # Show progress indicator
+            with self.console.status("[bold green]🔍 Performing deep analysis...[/bold green]", spinner="dots"):
+                # Use AnalysisManager for deep analysis
+                result = self.analysis_manager.perform_deep_analysis(user_query)
+            
+            # Display the result
+            if result:
+                self.console.print("\n[bold cyan]🎯 Deep Analysis Complete:[/bold cyan]")
+                self.console.print(Panel.fit(
+                    result,
+                    title="[bold green]Analysis Result[/bold green]",
+                    border_style="green"
+                ))
+                
+                # Add to conversation history
+                self.conversation.add_message("user", user_query)
+                self.conversation.add_message("assistant", result)
+            else:
+                self.console.print("[red]❌ Deep analysis failed. Falling back to normal mode.[/red]")
+                # Fallback to normal processing
+                self._handle_normal_response(user_query)
+                
+        except Exception as e:
+            self.console.print(f"[red]❌ Error in hard thinking mode: {str(e)}[/red]")
+            self.console.print("[yellow]Falling back to normal mode...[/yellow]")
+            # Fallback to normal processing
+            self._handle_normal_response(user_query)
+
+    def _handle_normal_response(self, user_query: str) -> None:
+        """Handle normal thinking mode with standard response."""
+        # Add to conversation and stream response (existing behavior)
+        self.conversation.add_message("user", user_query)
+        self.stream_response()
+
+    def get_multiline_input(self, prefill_text: str = "") -> Optional[str]:
+        """Get multiline input using the terminal input handler."""
+        return self.input_handler.get_multiline_input(prefill_text)
+    
+    def _open_command_palette(self):
+        """Open the command palette interface."""
+        try:
+            from utils.command_palette import CommandPalette
+            
+            # Create and show the command palette
+            palette = CommandPalette(self)
+            selected_item = palette.show()
+            
+            if selected_item:
+                # Execute the selected command
+                palette.execute_command(selected_item)
+                
+                # Check if it was an exit command
+                if selected_item.name == "exit":
+                    return "exit"
+            
+            return "continue"
+            
+        except ImportError:
+            self.console.print("[yellow]Command palette not available. Use 'palette' command instead.[/yellow]")
+            return "continue"
+        except Exception as e:
+            self.console.print(f"[red]Error opening command palette: {str(e)}[/red]")
+            return "continue"
+    
+    def get_quick_response(self, model: str = None) -> str:
+        """Get a quick response without UI formatting - for command line mode."""
+        if model is None:
+            model = self.current_model
+        
+        try:
+            # Get messages for API
+            api_messages = self.conversation.get_messages_for_api()
+            
+            # Get model info to determine the best approach
+            model_info = self.groq_client.get_model_info(model)
+            
+            # For quick responses, prefer non-streaming to get complete response at once
+            response_data = self.groq_client.get_non_stream_completion(api_messages, model)
+            content = response_data.get('content', '')
+            
+            if content:
+                # Add to conversation for consistency
+                self.conversation.add_message("assistant", content)
+                return content
+            else:
+                return "No response received"
+                
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    def stream_response(self, model: str = None):
+        """Stream response with enhanced UI."""
+        if model is None:
+            model = self.current_model
+        
+        # Show model capabilities info
+        model_info = self.groq_client.get_model_info(model)
+        if model_info.get('supports_tools'):
+            compound_panel = self.panel_factory.create_compound_info_panel()
+            self.console.print(compound_panel)
+        
+        # Get messages for API
+        api_messages = self.conversation.get_messages_for_api()
+        
+        with Live(auto_refresh=True, console=self.console) as live:
+            try:
+                # Determine if we should use streaming or non-streaming
+                reasoning_enabled = self.config.get('include_reasoning', True)
+                reasoning_requires_non_streaming = model_info.get('reasoning_requires_non_streaming', False)
+                force_non_streaming = reasoning_enabled and reasoning_requires_non_streaming
+                
+                use_streaming = (model_info.get('supports_streaming', True) and 
+                               not model_info.get('supports_tools') and 
+                               not force_non_streaming)
+                
+
+                
+                if use_streaming:
+                    # Streaming response for models that support it (when reasoning doesn't require non-streaming)
+                    full_content = ""
+                    reasoning_content = None
+                    
+                    for chunk_data in self.groq_client.stream_completion(api_messages, model):
+                        if chunk_data.get("type") == "content":
+                            full_content += chunk_data.get("data", "")
+                        elif chunk_data.get("type") == "reasoning":
+                            reasoning_content = chunk_data.get("data")
+                        elif chunk_data.get("type") == "error":
+                            self.console.print(f"[red]Error: {chunk_data.get('data')}[/red]")
+                            return
+                            
+                        # Update display
+                        panels = []
+                        
+                        # Show reasoning panel first (if available and enabled)
+                        if reasoning_content and self.config.get('show_reasoning_panel', True):
+                            reasoning_panel = self.panel_factory.create_reasoning_panel(reasoning_content)
+                            if reasoning_panel:
+                                panels.append(reasoning_panel)
+                        
+                        # Show response panel
+                        if full_content:
+                            panels.append(self.panel_factory.create_response_panel(full_content))
+                        else:
+                            panels.append(self.panel_factory.create_info_panel("Thinking...", "Status"))
+                        
+                        if panels:
+                            live.update(Group(*panels))
+                    
+                    # Add to conversation
+                    if full_content:
+                        self.conversation.add_message("assistant", full_content)
+                
+                else:
+                    # Non-streaming response (for compound models, reasoning-enabled GPT-OSS, or when streaming disabled)
+                    # Only show status for compound models with tools (which are slower)
+                    if model_info.get('supports_tools'):
+                        live.update(self.panel_factory.create_info_panel("Processing with AI tools...", "Status"))
+                    
+                    response_data = self.groq_client.get_non_stream_completion(api_messages, model)
+                    content = response_data.get('content', '')
+                    reasoning = response_data.get('reasoning')
+                    executed_tools = response_data.get('executed_tools')
+                    
+                    # Prepare display panels
+                    panels = []
+                    
+                    # Show reasoning panel first (if available and enabled)
+                    if reasoning and self.config.get('show_reasoning_panel', True):
+                        reasoning_panel = self.panel_factory.create_reasoning_panel(reasoning)
+                        if reasoning_panel:
+                            panels.append(reasoning_panel)
+                    
+                    # Show response panel
+                    if content:
+                        panels.append(self.panel_factory.create_response_panel(content))
+                    
+                    # Show tools usage if available (after other panels)
+                    if executed_tools:
+                        tools_panel = self.panel_factory.create_tools_panel(len(executed_tools))
+                        panels.append(tools_panel)
+                    
+                    # Update display with all panels at once - this replaces any previous status
+                    if panels:
+                        live.update(Group(*panels))
+                        self.conversation.add_message("assistant", content)
+                    else:
+                        live.update(self.panel_factory.create_error_panel("No response received"))
+                    
+            except KeyboardInterrupt:
+                self.console.print("\n[yellow]Response cancelled by user.[/yellow]")
+                return
+            except Exception as e:
+                error_panel = self.panel_factory.create_error_panel(f"Error: {str(e)}")
+                live.update(error_panel)
+                return
+    
+    def handle_command(self, user_input: str) -> bool:
+        """Handle command input. Returns True if was a command."""
+        # Parse command
+        cmd_info = CommandValidator.parse_command(user_input)
+        
+        if not cmd_info.get('is_command'):
+            return False
+        
+        command = cmd_info['command']
+        args = cmd_info['args']
+        
+        # Clear help line before command output to prevent overwriting
+        self._clear_help_line()
+        
+        # Built-in commands
+        if command == 'help':
+            self._show_help()
+            return True
+            
+        elif command == 'status':
+            self._show_status()
+            return True
+            
+        elif command == 'new':
+            self.conversation = Conversation()
+            self.current_model = self.config.get('default_model', 'openai/gpt-oss-20b')
+            self.console.print("[green]✅ Started new chat session.[/green]")
+            return True
+        
+        elif command == 'clear':
+            self.conversation.clear()
+            self.console.print("[green]✅ Conversation history cleared.[/green]")
+            return True
+        
+        elif command == 'history':
+            if self.conversation.messages:
+                history_table = self.table_factory.create_history_table(
+                    self.conversation.get_messages_for_api()
+                )
+                self.console.print(history_table)
+            else:
+                self.console.print("[yellow]No conversation history.[/yellow]")
+            return True
+        
+    # Note: explicit 'exit' / 'quit' commands removed — user quits with Ctrl+C
+        
+        elif command == 'model':
+            error = CommandValidator.validate_model_command(args)
+            if error:
+                self.console.print(f"[red]{error}[/red]")
+            else:
+                if not args:
+                    # Reset to default
+                    self.current_model = self.config.get('default_model', 'openai/gpt-oss-20b')
+                    self.console.print(f"[green]✅ Reset to default model: {self.current_model}[/green]")
+                else:
+                    # Switch to specific model
+                    self.current_model = args[0]
+                    self.console.print(f"[green]✅ Switched to model: {self.current_model}[/green]")
+            return True
+        
+        elif command == 'config' or command == 'settings':
+            self._show_config()
+            return True
+        
+        elif command == 'thinking':
+            # Toggle thinking mode
+            current_mode = self.config.get('thinking_mode', 'normal')
+            new_mode = 'hard' if current_mode == 'normal' else 'normal'
+            
+            # Update config
+            self.config.set('thinking_mode', new_mode)
+            
+            # Save configuration to file
+            try:
+                self.config.save_to_file(self.config_path)
+            except Exception as e:
+                self.console.print(f"[red]⚠️  Warning: Could not save configuration: {str(e)}[/red]")
+            
+            # Show status
+            mode_display = "🔍 Hard Thinking (Deep Analysis)" if new_mode == 'hard' else "⚡ Normal Thinking (Fast Response)"
+            self.console.print(f"[green]✅ Thinking mode switched to: {mode_display}[/green]")
+            
+            if new_mode == 'hard':
+                self.console.print("[blue]💡 Hard thinking mode activated. The AI will use an 8-step optimized prompt sequence for complex analysis.[/blue]")
+            else:
+                self.console.print("[blue]💡 Normal thinking mode activated. The AI will provide fast, direct responses.[/blue]")
+            
+            # Update status bar to reflect the change
+            self.display_status_bar()
+            
+            return True
+        
+        # Try command handler for other commands
+        result = self.command_handler.execute(user_input)
+        if result is not None:
+            return True
+        
+        # Unknown command - provide helpful error message
+        self.console.print(f"[red]Unknown command: {command}[/red]")
+        self.console.print("Type [cyan]help[/cyan] for available commands or press [cyan]/[/cyan] for command palette.")
+        return True
+    
+    def run(self):
+        """Main application loop."""
+        # Clear screen on start if enabled and interactive TTY
+        try:
+            import sys as _sys
+            if self.config.get('clear_on_start', True) and _sys.stdout.isatty():
+                self.console.clear()
+        except Exception:
+            pass
+        self.display_welcome()
+        # Show status bar once at startup
+        self.display_status_bar()
+        
+        while True:
+            try:
+                # Remove the status bar from the loop to avoid cursor interference
+                user_input = self.get_multiline_input()
+                if not user_input:
+                    continue
+                
+                # Check if it's a command
+                if self.handle_command(user_input):
+                    continue
+                
+                # Process based on thinking mode
+                thinking_mode = self.config.get('thinking_mode', 'normal')
+                if thinking_mode == 'hard':
+                    self._handle_hard_thinking(user_input)
+                else:
+                    self._handle_normal_response(user_input)
+                
+            except KeyboardInterrupt:
+                # Clean exit - replace prompt with termination message
+                import sys
+                sys.stdout.write("\r\033[2KProgram Terminated by the user\n")
+                sys.stdout.flush()
+                break
+            except Exception as e:
+                error_panel = self.panel_factory.create_error_panel(f"Unexpected error: {str(e)}")
+                self.console.print(error_panel)
+
+
+def main():
+    """Entry point."""
+    try:
+        cli = GPTCLI()
+        cli.run()
+    except KeyboardInterrupt:
+        # Exit silently - no goodbye message
+        pass
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
